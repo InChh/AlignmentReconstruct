@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Public Headers"><UniqueIdentifier>{0CF44C6F-1E2C-46EB-A923-133E95C96BE5}</UniqueIdentifier></Filter>
+    <Filter Include="Source Files"><UniqueIdentifier>{CD7EDE88-7466-4DA1-A19F-A5CE193F1D77}</UniqueIdentifier></Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\alignment_reconstruct\adjustment.h"><Filter>Public Headers</Filter></ClInclude>
+    <ClInclude Include="include\alignment_reconstruct\reconstruction.h"><Filter>Public Headers</Filter></ClInclude>
+    <ClInclude Include="include\alignment_reconstruct\types.h"><Filter>Public Headers</Filter></ClInclude>
+    <ClInclude Include="src\geometry\line_fit.h"><Filter>Source Files</Filter></ClInclude>
+    <ClInclude Include="src\geometry\vector_math.h"><Filter>Source Files</Filter></ClInclude>
+    <ClInclude Include="src\horizontal\horizontal_alignment.h"><Filter>Source Files</Filter></ClInclude>
+    <ClInclude Include="src\horizontal\alignment_optimizer.h"><Filter>Source Files</Filter></ClInclude>
+    <ClInclude Include="src\horizontal\curvature_classifier.h"><Filter>Source Files</Filter></ClInclude>
+    <ClInclude Include="src\horizontal\horizontal_element.h"><Filter>Source Files</Filter></ClInclude>
+    <ClInclude Include="src\horizontal\horizontal_reconstructor.h"><Filter>Source Files</Filter></ClInclude>
+    <ClInclude Include="src\vertical\profile_classifier.h"><Filter>Source Files</Filter></ClInclude>
+    <ClInclude Include="src\vertical\vertical_alignment.h"><Filter>Source Files</Filter></ClInclude>
+    <ClInclude Include="src\vertical\vertical_reconstructor.h"><Filter>Source Files</Filter></ClInclude>
+    <ClInclude Include="src\alignment\adjustment_calculator.h"><Filter>Source Files</Filter></ClInclude>
+  </ItemGroup>
+  <ItemGroup><ClCompile Include="src\adjustment.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\alignment\adjustment_calculator.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\geometry\line_fit.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\geometry\vector_math.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\horizontal\alignment_optimizer.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\horizontal\curvature_classifier.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\horizontal\horizontal_alignment.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\horizontal\horizontal_element.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\horizontal\horizontal_reconstructor.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\reconstruction.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\types.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\vertical\profile_classifier.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\vertical\vertical_alignment.cpp"><Filter>Source Files</Filter></ClCompile><ClCompile Include="src\vertical\vertical_reconstructor.cpp"><Filter>Source Files</Filter></ClCompile></ItemGroup>
+</Project>

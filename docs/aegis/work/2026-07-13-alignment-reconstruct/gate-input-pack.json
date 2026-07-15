@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "baselineRefs": [
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md",
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md",
+    "docs/aegis/adr/ADR-0001-pure-cpp-alignment-owners.md"
+  ],
+  "impactStatement": "docs/aegis/work/2026-07-13-alignment-reconstruct/impact-statement-draft.json",
+  "compatPlan": "受支持有效输入的旧活跃数值行为兼容；不包含旧 ABI、CAD、DWG、MDB、Excel 或 UI 兼容",
+  "retirementPlan": "legacy plugin retained read-only by explicit scope; no fallback added to the new library",
+  "evidenceBundle": [
+    "docs/aegis/work/2026-07-13-alignment-reconstruct/evidence-bundle-draft-final-verification.json"
+  ]
+}

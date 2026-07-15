@@ -1,0 +1,13 @@
+# Keep maintained Visual Studio sources and documentation in CRLF worktrees.
+*.sln text eol=crlf
+*.vcxproj text eol=crlf
+*.vcxproj.filters text eol=crlf
+*.cpp text eol=crlf
+*.h text eol=crlf
+*.md text eol=crlf
+*.ps1 text eol=crlf
+*.json text eol=crlf
+*.mjs text eol=crlf
+
+# Field-reference fixtures are checksummed evidence; preserve their bytes.
+tests/fixtures/*.csv -text

@@ -1,0 +1,33 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.0.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AlignmentReconstruct", "AlignmentReconstruct.vcxproj", "{A1C52A83-8EC9-4D7A-91B5-32AAEAC4D5A1}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AlignmentReconstruct.Tests", "tests\AlignmentReconstruct.Tests.vcxproj", "{B2D6D7A1-78D2-4E2F-8BD7-64BA67FCF9A2}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AlignmentReconstruct.Sample", "samples\AlignmentReconstruct.Sample.vcxproj", "{C3E782B4-DAE5-47EA-AE4A-3E7C0DB8B4C3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A1C52A83-8EC9-4D7A-91B5-32AAEAC4D5A1}.Debug|x64.ActiveCfg = Debug|x64
+		{A1C52A83-8EC9-4D7A-91B5-32AAEAC4D5A1}.Debug|x64.Build.0 = Debug|x64
+		{A1C52A83-8EC9-4D7A-91B5-32AAEAC4D5A1}.Release|x64.ActiveCfg = Release|x64
+		{A1C52A83-8EC9-4D7A-91B5-32AAEAC4D5A1}.Release|x64.Build.0 = Release|x64
+		{B2D6D7A1-78D2-4E2F-8BD7-64BA67FCF9A2}.Debug|x64.ActiveCfg = Debug|x64
+		{B2D6D7A1-78D2-4E2F-8BD7-64BA67FCF9A2}.Debug|x64.Build.0 = Debug|x64
+		{B2D6D7A1-78D2-4E2F-8BD7-64BA67FCF9A2}.Release|x64.ActiveCfg = Release|x64
+		{B2D6D7A1-78D2-4E2F-8BD7-64BA67FCF9A2}.Release|x64.Build.0 = Release|x64
+		{C3E782B4-DAE5-47EA-AE4A-3E7C0DB8B4C3}.Debug|x64.ActiveCfg = Debug|x64
+		{C3E782B4-DAE5-47EA-AE4A-3E7C0DB8B4C3}.Debug|x64.Build.0 = Debug|x64
+		{C3E782B4-DAE5-47EA-AE4A-3E7C0DB8B4C3}.Release|x64.ActiveCfg = Release|x64
+		{C3E782B4-DAE5-47EA-AE4A-3E7C0DB8B4C3}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

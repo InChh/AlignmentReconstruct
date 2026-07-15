@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "在独立 VS2026 C++17 x64 静态库中迁移平纵线形重构，并计算逐点拨量和抬落道量",
+  "scope": "D:/Programming/C++/Projects/既有线/AlignmentReconstruct；旧 ObjectARX 仓库只读",
+  "changeKinds": [
+    "new-static-library",
+    "algorithm-migration",
+    "public-api",
+    "verification"
+  ],
+  "riskHints": [
+    "legacy-geometry-semantics",
+    "station-source-of-truth",
+    "field-data-without-z"
+  ]
+}

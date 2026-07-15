@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "final-verification",
+  "type": "build-parity-boundary",
+  "source": "docs/verification/2026-07-13-build-and-parity.md",
+  "summary": "Debug and Release x64 builds, 29 tests per configuration, reconstructed-intersection move adjustment parity, sample execution, field horizontal parity, deterministic vertical closure, dependency scan, archive member scan, and legacy-repository boundary check all passed",
+  "verifier": "Codex fresh verification on 2026-07-13"
+}

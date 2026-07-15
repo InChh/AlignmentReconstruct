@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [
+    "public-contract",
+    "geometry",
+    "horizontal-alignment",
+    "vertical-alignment",
+    "reconstruction",
+    "adjustment"
+  ],
+  "owners": [
+    "HorizontalAlignment",
+    "VerticalAlignment",
+    "HorizontalReconstructor",
+    "VerticalReconstructor",
+    "AlignmentAdjustmentCalculator"
+  ],
+  "invariants": [
+    "C++17 standard library production dependency only",
+    "horizontal projection is the single station owner",
+    "offset is right-positive and lift/drop is design elevation minus measured z"
+  ],
+  "compatBoundary": "受支持有效输入的旧活跃数值行为兼容；不包含旧 ABI、CAD、DWG、MDB、Excel 或 UI 兼容",
+  "nonGoals": [
+    "modify or retire the legacy ObjectARX plugin",
+    "AutoCAD integration",
+    "unordered point routing"
+  ]
+}

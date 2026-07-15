@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-07-13-alignment-reconstruct",
+  "taskIntentRef": "docs/aegis/work/2026-07-13-alignment-reconstruct/task-intent-draft.json",
+  "baselineRefs": [
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md",
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md",
+    "docs/aegis/adr/ADR-0001-pure-cpp-alignment-owners.md"
+  ],
+  "scopeStatus": "aligned",
+  "compatStatus": "verified within the recorded field and deterministic-data boundary",
+  "retirementStatus": "legacy plugin retained read-only by explicit scope; no fallback added to the new library",
+  "newRiskSignals": [
+    "field workbook has no z, so field vertical parity remains uncovered"
+  ],
+  "decision": "continue"
+}

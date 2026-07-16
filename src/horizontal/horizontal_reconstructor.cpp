@@ -1,6 +1,6 @@
 #include "horizontal/horizontal_reconstructor.h"
 
-#include "geometry/line_fit.h"
+#include "geometry/legacy_line_fit.h"
 #include "geometry/vector_math.h"
 #include "horizontal/alignment_optimizer.h"
 #include "horizontal/curvature_classifier.h"
@@ -15,24 +15,9 @@ namespace alignment_reconstruct::detail {
 namespace {
 
 struct FittedStraightRun {
-    ClassificationRun run;
-    LineFitResult line;
+    HorizontalStraightSegment segment;
+    LegacyLineFitResult fit;
 };
-
-Point2D project_to_line(const Point2D& point, const LineFitResult& line) {
-    return add(line.centroid, scale(
-        line.unit_direction, dot(subtract(point, line.centroid), line.unit_direction)));
-}
-
-Point2D intersect_lines(const LineFitResult& first, const LineFitResult& second) {
-    const double denominator = cross(first.unit_direction, second.unit_direction);
-    if (std::abs(denominator) <= 1.0e-10) {
-        throw std::invalid_argument("Adjacent fitted tangents are parallel");
-    }
-    const double parameter = cross(
-        subtract(second.centroid, first.centroid), second.unit_direction) / denominator;
-    return add(first.centroid, scale(first.unit_direction, parameter));
-}
 
 std::vector<Point2D> copy_range(
     const std::vector<Point2D>& points,
@@ -52,57 +37,55 @@ std::vector<HorizontalControlPoint> HorizontalReconstructor::reconstruct(
     const std::vector<Point2D>& ordered_points) const {
     const auto analysis = classify_horizontal_samples(ordered_points, options_);
     std::vector<FittedStraightRun> straight_runs;
-    std::vector<ClassificationRun> curve_runs;
-    for (const auto& run : analysis.runs) {
-        if (run.curved) {
-            curve_runs.push_back(run);
-        } else {
-            const auto points = copy_range(ordered_points, run.first_index, run.last_index);
-            const auto fit = fit_orthogonal_line(points);
-            if (!fit.valid) {
-                throw std::invalid_argument("Fitted horizontal tangent is degenerate");
-            }
-            straight_runs.push_back({run, fit});
+    for (const auto& segment : analysis.straight_segments) {
+        const auto points = copy_range(
+            ordered_points, segment.first_index, segment.last_index);
+        const auto fit = fit_legacy_reconstruction_line(points);
+        if (!fit.valid) {
+            throw std::invalid_argument("Fitted horizontal tangent is degenerate");
         }
+        straight_runs.push_back({segment, fit});
     }
-    if (straight_runs.empty() || analysis.runs.front().curved || analysis.runs.back().curved) {
+    if (straight_runs.empty()) {
         throw std::invalid_argument("Reconstruction requires straight samples at both route ends");
     }
-    if (straight_runs.size() != curve_runs.size() + 1) {
-        throw std::invalid_argument("Horizontal straight/curve segmentation is inconsistent");
-    }
+    const std::size_t curve_count = straight_runs.size() - 1;
 
     std::vector<Point2D> intersections;
-    intersections.reserve(curve_runs.size());
-    for (std::size_t index = 0; index < curve_runs.size(); ++index) {
-        intersections.push_back(intersect_lines(
-            straight_runs[index].line, straight_runs[index + 1].line));
+    intersections.reserve(curve_count);
+    for (std::size_t index = 0; index < curve_count; ++index) {
+        Point2D intersection{};
+        if (!intersect_legacy_lines(
+                straight_runs[index].fit,
+                straight_runs[index + 1].fit,
+                intersection)) {
+            throw std::invalid_argument("Adjacent fitted tangents are parallel");
+        }
+        intersections.push_back(intersection);
     }
 
     std::vector<HorizontalControlPoint> controls;
-    controls.reserve(curve_runs.size() + 2);
+    controls.reserve(curve_count + 2);
     controls.push_back({
         HorizontalControlPointKind::start,
-        project_to_line(ordered_points.front(), straight_runs.front().line),
+        project_to_legacy_line(ordered_points.front(), straight_runs.front().fit),
         0.0, 0.0, 0.0
     });
-    for (std::size_t index = 0; index < curve_runs.size(); ++index) {
-        const auto& incoming_run = straight_runs[index].run;
-        const auto& outgoing_run = straight_runs[index + 1].run;
-        const std::size_t objective_first = incoming_run.last_index > 5
-            ? std::max(incoming_run.first_index, incoming_run.last_index - 5)
-            : incoming_run.first_index;
-        const std::size_t objective_last = std::min(
-            outgoing_run.last_index, outgoing_run.first_index + 5);
+    for (std::size_t index = 0; index < curve_count; ++index) {
+        const auto& incoming_segment = straight_runs[index].segment;
+        const auto& outgoing_segment = straight_runs[index + 1].segment;
         const auto parameters = fit_horizontal_curve(
             ordered_points,
-            analysis.curvature_inverse_m,
-            curve_runs[index].first_index,
-            curve_runs[index].last_index,
-            objective_first,
-            objective_last,
-            straight_runs[index].line,
-            straight_runs[index + 1].line,
+            incoming_segment.circular_first_index,
+            incoming_segment.circular_last_index,
+            incoming_segment.first_index,
+            outgoing_segment.last_index,
+            straight_runs[index].fit.line,
+            straight_runs[index + 1].fit.line,
+            straight_runs[index].fit.start,
+            straight_runs[index].fit.end,
+            straight_runs[index + 1].fit.start,
+            straight_runs[index + 1].fit.end,
             intersections[index],
             options_);
         controls.push_back({
@@ -115,7 +98,7 @@ std::vector<HorizontalControlPoint> HorizontalReconstructor::reconstruct(
     }
     controls.push_back({
         HorizontalControlPointKind::end,
-        project_to_line(ordered_points.back(), straight_runs.back().line),
+        project_to_legacy_line(ordered_points.back(), straight_runs.back().fit),
         0.0, 0.0, 0.0
     });
 

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "candidateDocs": [
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md",
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md",
+    "docs/aegis/adr/ADR-0001-pure-cpp-alignment-owners.md",
+    "../主控/QXBoLiangCalDlg.cpp:70-258 active UI chain",
+    "../主控/CeDianNiHe.cpp:848-4917 active callees"
+  ],
+  "whyRelevant": "设计规定活跃旧算法数值兼容；当前证据显示重构仍有分米/米级偏差",
+  "missingAuthority": []
+}

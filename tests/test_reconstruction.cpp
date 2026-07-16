@@ -27,14 +27,25 @@ double signed_offset_to_directed_line(
             delta_y * (point.x - line_start.x)) / length;
 }
 
+Point2D rotate_point(const Point2D& point, double angle_rad) {
+    return {
+        point.x * std::cos(angle_rad) - point.y * std::sin(angle_rad),
+        point.x * std::sin(angle_rad) + point.y * std::cos(angle_rad)
+    };
+}
+
 } // namespace
 
 AR_TEST(public_reconstruction_returns_complete_horizontal_and_vertical_schemes) {
+    constexpr double rotation_rad = 0.3;
     AlignmentDefinition expected;
     expected.horizontal = {
-        {HorizontalControlPointKind::start, {0.0, 0.0}, 0.0, 0.0, 0.0},
-        {HorizontalControlPointKind::intersection, {1200.0, 0.0}, 600.0, 80.0, 70.0},
-        {HorizontalControlPointKind::end, {1800.0, 900.0}, 0.0, 0.0, 0.0}
+        {HorizontalControlPointKind::start,
+         rotate_point({0.0, 0.0}, rotation_rad), 0.0, 0.0, 0.0},
+        {HorizontalControlPointKind::intersection,
+         rotate_point({1200.0, 0.0}, rotation_rad), 600.0, 80.0, 70.0},
+        {HorizontalControlPointKind::end,
+         rotate_point({1800.0, 900.0}, rotation_rad), 0.0, 0.0, 0.0}
     };
     const detail::HorizontalAlignment horizontal(expected.horizontal, 0.0);
     expected.vertical = {
@@ -90,10 +101,14 @@ AR_TEST(public_reconstruction_reports_order_and_finite_input_errors) {
 }
 
 AR_TEST(public_adjustment_after_reconstructed_intersection_move_matches_tangent_geometry) {
+    constexpr double rotation_rad = 0.3;
     const std::vector<HorizontalControlPoint> seed_controls{
-        {HorizontalControlPointKind::start, {0.0, 0.0}, 0.0, 0.0, 0.0},
-        {HorizontalControlPointKind::intersection, {1200.0, 0.0}, 600.0, 80.0, 70.0},
-        {HorizontalControlPointKind::end, {1800.0, 900.0}, 0.0, 0.0, 0.0}
+        {HorizontalControlPointKind::start,
+         rotate_point({0.0, 0.0}, rotation_rad), 0.0, 0.0, 0.0},
+        {HorizontalControlPointKind::intersection,
+         rotate_point({1200.0, 0.0}, rotation_rad), 600.0, 80.0, 70.0},
+        {HorizontalControlPointKind::end,
+         rotate_point({1800.0, 900.0}, rotation_rad), 0.0, 0.0, 0.0}
     };
     const detail::HorizontalAlignment seed_alignment(seed_controls, 0.0);
 

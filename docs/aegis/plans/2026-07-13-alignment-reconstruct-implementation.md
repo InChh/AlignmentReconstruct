@@ -297,6 +297,22 @@ wc -l tests/fixtures/k1413_k1462_points.csv tests/fixtures/k1413_k1462_horizonta
 - [x] 恢复 22 个控制点并记录交点、半径、进/出口缓长最大误差及索引。
 - [x] 对不一致处扩展阅读真实调用者和参数来源；未加入 fixture 专用分支。
 
+### Task 7 继续迁移（2026-07-16）
+
+上述勾选项只证明当时的近似实现恢复了 22 个控制点，不证明已完成活跃旧算法迁移。现场对照仍存在交点 `0.232059 m`、半径 `3.16358 m`、进口缓长 `5.92673 m`和出口缓长 `3.8956 m` 的最大误差，因此 Task 7 重新打开。
+
+**唯一算法权威**：从“全线坐标拟合”对话框的两个活跃按钮逐层追踪。`CQXBoLiangCalDlg::OnBnClickedButtonZdfd` 当前执行 `Sort` → `JMSurPtLC` → `CalCurvature` → `MarkProperty` → `IDdentifyLineOrCurve` → `Dynamic_Adjust_Property_SetAdjust(5)` → `DealFanxiangQX` → `CalFJD` → `CheckCurve` → 空的 `Checkline` → `Dynamic_Adjust_Property_SetAdjust(6)`；随后 `CQXBoLiangCalDlg::OnBnClickedButtonNhht` 执行 `FormLineSeg`，有曲线时执行 `IDSpiral` → `SwingAlgorithm`，最后执行 `AllQXNH2`。平面数值实现位于 `CeDianNiHe.cpp`；同名 `_SW`、`New`、`opti`、`SwingAlgorithm_SinglePI`、注释代码和未被两个按钮调用的历史实现都不是本任务算法权威。
+
+**新验收条件**：
+
+- [x] 建立严格 RED：22 个控制点数量和类型必须完全一致；交点坐标、半径、进口缓长、出口缓长分别统计最大误差。
+- [x] 迁移活跃直曲稳定化和三态直/圆/缓边界调整，删除现有简化小岛合并的主路径权威。
+- [x] 使用旧路径的完整 `SNO .. next ENO` 目标样本范围，不再只取直线端部少量点。
+- [x] 保留变量顺序 `(l1, R, l2)`、拨量平方和目标及活跃 Powell/Brent 搜索与停止条件，退役 Nelder-Mead 和曲率排名选圆点启发式。
+- [x] 严格 GREEN：四类最大误差均 `<= 0.001 m`，并保持拨量、纵面、Debug/Release 和无 ARX/MFC 边界回归。
+
+**数值一致性关键点**：`YNH2` 的圆心初值使用 `sum / count` 的直接除法。将它改写成 `sum * (1.0 / count)` 虽在数学上等价，但会改变最后一位浮点种子；旧 Powell 目标在现场曲线上较平坦，该差异会放大为厘米级参数漂移，因此实现必须保留旧运算顺序。
+
 ## Task 8：迁移纵断面重构
 
 **Files**

@@ -60,8 +60,14 @@ CAD 绘图、文件解析、数据库访问、无序点寻路和旧插件集成�
 
 | 目的 | 旧代码入口 |
 | --- | --- |
-| 总重构流程 | `CH_V_Cal.cpp:132-215` |
-| 平面分段、拟合和优化 | `CH_V_Cal.cpp:294-2889` |
+| 平面“直曲自动分段”活跃入口 | `QXBoLiangCalDlg.cpp:70-157`，`CQXBoLiangCalDlg::OnBnClickedButtonZdfd` |
+| 平面“生成平面线位”活跃入口 | `QXBoLiangCalDlg.cpp:159-258`，`CQXBoLiangCalDlg::OnBnClickedButtonNhht` |
+| 点序、累计距离、曲率和初始分类 | `CeDianNiHe.cpp:848-1366`：`Sort`、`JMSurPtLC`、`CalCurvature`、`MarkProperty`、`Dynamic_Adjust_Property_SetAdjust` |
+| 直曲稳定化和反向曲线处理 | `CeDianNiHe.cpp:1373-1838`：`FormLineSeg`、`IDdentifyLineOrCurve`、`DealFanxiangQX`、`CalFJD`、`CheckCurve` |
+| 直线拟合和相交判定 | `CeDianNiHe.cpp:2279-2431`：`IsIntersectionBetween`、`FitLine`、`FootPoint` |
+| 圆/缓和三态识别 | `CeDianNiHe.cpp:2451-2882`：`IDSpiral`、`FormLineSeg2`、`AtLeastOneCurvPt`、`AtLeastOneLinePt` |
+| 全线参数输出和拨量优化 | `CeDianNiHe.cpp:2974-4278`：`AllQXNH2`、`YNH2`、`CalJDZB`、`CalL0`、`YouHuaBL`、`CalBL`、Powell/Brent 系列 |
+| 缓和边界摆动稳定化 | `CeDianNiHe.cpp:4692-4917`，`SwingAlgorithm` |
 | JD 方案生成 typed 线路的旧行为 | `RHA.cpp:3348-4003` |
 | 直线/圆/缓和线元与投影 | `BAS_CALC_FUN.cpp:767-1165`、`:2279-2897` |
 | 拨量及正负号 | `RHA.cpp:26041-26188` |
@@ -70,7 +76,9 @@ CAD 绘图、文件解析、数据库访问、无序点寻路和旧插件集成�
 | 平纵联合调用 | `ZDMSJ.cpp:10949-10968` |
 | 抬落道及符号 | `DrawSlope.cpp:6337-6367`、`:3306-3376` |
 
-参考优先级为：活跃业务调用链 > 活跃算法帮助函数 > 显示/统计代码。注释掉的历史实现只能作为线索。不得直接搬入 `CH_V_Cal`、`RHA`、`CString`、`CArray`、`AcGe`、CAD/UI/数据库代码、全局状态或十列裸数组模型。
+平面迁移必须先从上述两个按钮处理函数确认当前实际调用顺序，再进入 `CCeDianNiHe` 的被调函数；同名 `_SW`、`New`、`opti`、`SwingAlgorithm_SinglePI` 等未被这两个入口调用的实现不能取代活跃路径。`Checkline` 虽被调用但函数体为空，不得从注释代码臆造行为。
+
+参考优先级为：活跃业务调用链 > 活跃算法帮助函数 > 显示/统计代码。注释掉的历史实现只能作为线索。不得直接搬入 `CCeDianNiHe`、`CH_V_Cal`、`RHA`、`CString`、`CArray`、`AcGe`、CAD/UI/数据库代码、全局状态或十列裸数组模型。
 
 迁移或修正算法时，记录并验证“旧参考函数 → 新 owner → 对照夹具 → 数值容差”。目标是行为一致，不要求代码逐字一致。
 

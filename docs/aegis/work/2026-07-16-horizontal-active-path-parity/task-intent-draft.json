@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "以参考项目当前活跃平面重构路径为唯一算法权威，继续迁移并把现场重构控制点误差压到毫米级",
+  "goal": "22 个控制点数量与类型完全一致，交点坐标、半径、进口缓长、出口缓长相对 MDB 最大误差分别不超过 0.001 m",
+  "successEvidence": [
+    "严格现场 RED/GREEN 回归、逐阶段旧函数映射、Debug/Release 全量测试、拨量与纵面回归、生产依赖与私有数据边界扫描"
+  ],
+  "stopCondition": "全部严格证据满足为 done；证据不全为 needs-verification；活跃路径或必需数据无法读取为 blocked；需要扩大公共契约或修改旧仓库为 scope-exceeded",
+  "nonGoals": [
+    "不参考注释代码作为权威，不修改纵面算法，不修改旧插件，不加入 MDB/Excel 生产依赖，不硬编码现场结果"
+  ],
+  "scope": "AlignmentReconstruct 的 HorizontalReconstructor、曲率/分段、直线/圆拟合、缓和曲线识别、Powell/Brent 优化及其测试和治理文档；旧仓库只读",
+  "changeKinds": [
+    "migration"
+  ],
+  "riskHints": [
+    "旧文件含注释实现和死代码；必须从 OnBnClickedButtonZdfd、OnBnClickedButtonNhht 两个活跃按钮追踪 CCeDianNiHe 当前被调函数，禁止依据同名 _SW、New、opti、注释分支或当前近似实现自行设计"
+  ]
+}

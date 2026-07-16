@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-07-16-horizontal-active-path-parity",
+  "currentTodo": "complete",
+  "completedTodos": [
+    "锁定 OnBnClickedButtonZdfd 直曲分段链和 OnBnClickedButtonNhht -> FormLineSeg -> IDSpiral -> SwingAlgorithm -> AllQXNH2 活跃主链",
+    "建立逐类型 0.001 m 严格现场 RED，确认当前最大误差",
+    "迁移活跃直曲稳定化、IDSpiral、SwingAlgorithm、AllQXNH2 和 Powell/Brent 链",
+    "严格现场四类最大误差全部小于 0.001 m",
+    "Debug/Release Rebuild、30 项测试、样例和生产边界扫描通过"
+  ],
+  "activeSlice": null,
+  "evidenceRefs": [
+    "strict-field-red",
+    "strict-field-green",
+    "debug-release-regression",
+    "production-boundary-scan"
+  ],
+  "blockedOn": null,
+  "nextStep": null,
+  "updatedAt": "2026-07-16"
+}

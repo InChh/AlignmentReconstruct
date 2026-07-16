@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-07-16-horizontal-active-path-parity",
+  "taskIntentRef": "docs/aegis/work/2026-07-16-horizontal-active-path-parity/task-intent-draft.json",
+  "baselineRefs": [
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md",
+    "../主控/QXBoLiangCalDlg.cpp:70-258 active UI chain",
+    "../主控/CeDianNiHe.cpp:848-4917 active callees"
+  ],
+  "scopeStatus": "inside HorizontalReconstructor Task 7 boundary",
+  "compatStatus": "public entrypoints, units, coordinate semantics, and pure C++ boundary unchanged; strict field parity achieved",
+  "retirementStatus": "heuristic classifier, curvature-ranked circle selection, local objective range, and Nelder-Mead production path removed",
+  "newRiskSignals": [
+    "legacy active branch behavior includes three-state sample properties and exact Powell/Brent termination"
+  ],
+  "decision": "continue"
+}

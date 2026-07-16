@@ -17,13 +17,16 @@ struct HorizontalCurveParameters {
 
 HorizontalCurveParameters fit_horizontal_curve(
     const std::vector<Point2D>& points,
-    const std::vector<double>& curvature_inverse_m,
     std::size_t curve_first_index,
     std::size_t curve_last_index,
     std::size_t objective_first_index,
     std::size_t objective_last_index,
     const LineFitResult& incoming_line,
     const LineFitResult& outgoing_line,
+    const Point2D& incoming_start,
+    const Point2D& incoming_end,
+    const Point2D& outgoing_start,
+    const Point2D& outgoing_end,
     const Point2D& intersection,
     const ReconstructionOptions& options);
 

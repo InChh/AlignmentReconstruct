@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-07-16-horizontal-active-path-parity",
+  "lastCheckpointRef": "docs/aegis/work/2026-07-16-horizontal-active-path-parity/todo-checkpoint-draft.json",
+  "resumeInstruction": "本任务已完成；若扩展稀疏圆样本边界，先读 90-evidence.md 的 Evidence Boundary，并继续以两个活跃按钮的可达路径为权威。",
+  "knownPartialWork": [
+    "锁定 OnBnClickedButtonZdfd 直曲分段链和 OnBnClickedButtonNhht -> FormLineSeg -> IDSpiral -> SwingAlgorithm -> AllQXNH2 活跃主链",
+    "建立逐类型 0.001 m 严格现场 RED，确认当前最大误差",
+    "完成活跃路径迁移并取得 strict-field-green",
+    "Debug/Release 全量回归和生产边界扫描通过"
+  ],
+  "mustReadBeforeContinuing": [
+    "docs/aegis/work/2026-07-16-horizontal-active-path-parity/10-intent.md",
+    "docs/aegis/work/2026-07-16-horizontal-active-path-parity/20-checkpoint.md",
+    "docs/aegis/work/2026-07-16-horizontal-active-path-parity/todo-checkpoint-draft.json"
+  ],
+  "unsafeToAssume": [
+    "少于 3 个圆样本的 BCTTP/BCTPP 稀疏分支不在本次完成证据内。"
+  ]
+}

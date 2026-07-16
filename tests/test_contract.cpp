@@ -51,6 +51,8 @@ AR_TEST(default_options_preserve_confirmed_horizontal_thresholds) {
     AR_EXPECT_NEAR(options.start_station_m, 0.0, 0.0);
     AR_EXPECT_NEAR(options.curvature_window_m, 15.0, 0.0);
     AR_EXPECT_NEAR(options.curvature_threshold_inverse_m, 0.00008, 0.0);
-    AR_EXPECT(options.minimum_curve_sample_count == 4);
-    AR_EXPECT(options.maximum_spiral_classification_iterations == 100);
+    AR_EXPECT(options.minimum_curve_sample_count == 3);
+    AR_EXPECT(options.maximum_spiral_classification_iterations == 300);
+    AR_EXPECT_NEAR(options.horizontal_optimization_tolerance, 1.0e-4, 0.0);
+    AR_EXPECT(options.horizontal_optimization_max_iterations == 10);
 }

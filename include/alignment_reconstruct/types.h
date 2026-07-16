@@ -94,10 +94,10 @@ struct ReconstructionOptions {
     double start_station_m = 0.0;
     double curvature_window_m = 15.0;
     double curvature_threshold_inverse_m = 0.00008;
-    std::size_t minimum_curve_sample_count = 4;
-    std::size_t maximum_spiral_classification_iterations = 100;
-    double horizontal_optimization_tolerance = 1.0e-5;
-    std::size_t horizontal_optimization_max_iterations = 200;
+    std::size_t minimum_curve_sample_count = 3;
+    std::size_t maximum_spiral_classification_iterations = 300;
+    double horizontal_optimization_tolerance = 1.0e-4;
+    std::size_t horizontal_optimization_max_iterations = 10;
     std::vector<double> vertical_second_difference_threshold_candidates{
         1.0e-7, 2.0e-7, 5.0e-7, 1.0e-6, 2.0e-6, 5.0e-6, 1.0e-5
     };

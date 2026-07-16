@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "baselineRefs": [
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md",
+    "../主控/QXBoLiangCalDlg.cpp:70-258 active UI chain",
+    "../主控/CeDianNiHe.cpp:848-4917 active callees"
+  ],
+  "impactStatement": "docs/aegis/work/2026-07-16-horizontal-active-path-parity/impact-statement-draft.json",
+  "compatPlan": "纯 C++17、x64、无 ARX/MFC；旧仓库不修改；公共函数和字段形状不变；平面默认迭代参数按旧活跃常量校正；私有现场数据不进入 Git",
+  "retirementPlan": "heuristic classifier, curvature-ranked circle selection, local objective range, and Nelder-Mead production path removed",
+  "evidenceBundle": [
+    "docs/aegis/work/2026-07-16-horizontal-active-path-parity/evidence-bundle-draft-strict-field-green.json",
+    "docs/aegis/work/2026-07-16-horizontal-active-path-parity/evidence-bundle-draft-strict-field-red.json"
+  ]
+}

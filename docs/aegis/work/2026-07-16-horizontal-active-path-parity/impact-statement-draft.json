@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [
+    "平面重构核心数值 owner 与现场兼容验证"
+  ],
+  "owners": [
+    "HorizontalReconstructor and its internal classifier/optimizer components"
+  ],
+  "invariants": [
+    "旧活跃路径的调用顺序、分段边界、变量顺序 (l1,R,l2)、目标函数和停止条件必须保持；不得新增 fixture 专用路径或生产 fallback"
+  ],
+  "compatBoundary": "纯 C++17、x64、无 ARX/MFC；旧仓库不修改；公共函数和字段形状不变；平面默认迭代参数按旧活跃常量校正；私有现场数据不进入 Git",
+  "nonGoals": [
+    "不参考注释代码作为权威，不修改纵面算法，不修改旧插件，不加入 MDB/Excel 生产依赖，不硬编码现场结果"
+  ]
+}

@@ -1,7 +1,7 @@
 # AlignmentReconstruct 完整设计规格
 
 日期：`2026-07-13`  
-状态：`完整方案，待实现`  
+状态：`已实现；2026-07-16 平面活跃路径完成毫米级对齐`
 架构审查：`需要`
 
 ## 1. 目标
@@ -17,6 +17,8 @@
 
 实现 Agent 必须以当前项目中的实际调用链和活跃函数为行为依据，不能只根据类型名或界面文字猜测算法：
 
+- “全线坐标拟合”对话框的平面流程由两个按钮组成：`CQXBoLiangCalDlg::OnBnClickedButtonZdfd` 先完成直曲自动分段，`CQXBoLiangCalDlg::OnBnClickedButtonNhht` 再执行 `FormLineSeg` → `IDSpiral` → `SwingAlgorithm` → `AllQXNH2`，这是平面重构的 A 级入口。
+- `OnBnClickedButtonZdfd` 的活跃数值顺序是 `Sort` → `JMSurPtLC` → `CalCurvature` → `MarkProperty` → `IDdentifyLineOrCurve` → `Dynamic_Adjust_Property_SetAdjust(5)` → `DealFanxiangQX` → `CalFJD` → `CheckCurve` → `Checkline` → `Dynamic_Adjust_Property_SetAdjust(6)`；其中 `Checkline` 当前为空函数。
 - `RHA::CalRectification` 先将测点 XY 投影到平面线路，得到投影里程、投影点和带符号拨量：`RHA.cpp:26041-26188`。
 - `ZDMSJ.cpp:10961-10968` 使用同一投影里程调用纵断面计算，形成拨量与抬落道量的联合结果。
 - `CDrawSlope::CalTLDL` 按 `设计高程 - 实测高程` 计算抬落道量，正值为抬道、负值为落道，并在旧界面链路中换算为毫米：`DrawSlope.cpp:6339-6367`。
@@ -36,7 +38,8 @@
 
 | 目的 | 必读代码 | Agent 应提取的行为 | 不应带入新库的内容 |
 | --- | --- | --- | --- |
-| 平纵重构总调用顺序 | `CH_V_Cal.cpp:132-215`，`CH_V_Cal::OnBnClickedButtonCreatrailway` | 平面排序/曲率/直曲识别/缓和曲线识别/全线拟合 → 建线和拨量 → 测点转纵面里程高程 → 纵面重构 → 抬落道量 | 对话框、Excel、文档锁、绘图、进度条、消息框 |
+| 平面直曲自动分段入口 | `QXBoLiangCalDlg.cpp:70-157`，`CQXBoLiangCalDlg::OnBnClickedButtonZdfd` | 按活跃顺序读取/整理测点、累计距离、计算曲率、直曲稳定化、反向曲线处理和短曲线检查 | 文件读取、Excel 回写、绘图、进度条、消息框 |
+| 平面线位生成入口 | `QXBoLiangCalDlg.cpp:159-258`，`CQXBoLiangCalDlg::OnBnClickedButtonNhht` | 依据当前 `SelSurPt.Propert` 重建直线段；有曲线时执行 `IDSpiral` 和 `SwingAlgorithm`，最后无条件执行 `AllQXNH2` 输出方案 | 对话框选项、CAD 文档锁、实体创建和显示 |
 | 三维测点及联合结果字段 | `Struct.h:508-561`，`SSurPt` | N/E、投影里程、拨量、实测高程、设计高程、抬落道量之间的关系 | `CString`、线路名、现场里程冠号、界面限制字段 |
 | 平面交点输出 | `Struct.h:678-732`，`JDarrayStruct` | 交点 N/E、`R`、`l1`、`l2`；起终点半径和缓长为零 | MDB/绘图/改建属性及字符串字段 |
 | 平面线元里程 | `Struct.h:563-675`，`QXBStruct`/`QXBCmlStruct` | ZH/HY/YH/HZ 里程、转角、切线长、曲线长、左右转 | 现场里程字符串和图形字段 |
@@ -47,16 +50,17 @@
 
 | 阶段 | 必读代码 | Agent 实现指引 |
 | --- | --- | --- |
-| 点序与累计里程 | `CH_V_Cal.cpp:294-431`：`Sort_SW`、`InertSurPtDat_SW` | 第一版公共契约要求调用方已按线路方向排序，因此只保留顺序校验、重复点校验和累计距离；不要复制旧的 UI 自动插点排序为默认行为 |
-| 曲率计算 | `CH_V_Cal.cpp:432-673`：`CalCurvature_SW`、`GetCirByThreePointOnArc_SW` | 保留 15m 前后搜索、三点圆、切线方位角及曲率计算顺序；把 `AcGe`/`BAS_CALC_FUN` 调用替换为纯 C++ 几何函数 |
-| 初始直曲分类 | `CH_V_Cal.cpp:674-935`：`MarkProperty_SW`、`FormLineSeg_SW`、`IDdentifyLineOrCurve_SW`、`IsIntersectionBetween_SW` | 提取阈值、连续区段稳定化和相邻直线相交判定；所有阈值进入 `ReconstructionOptions` |
-| 直线拟合 | `CH_V_Cal.cpp:936-1059`：`FitLine_SW`、`FootPoint_SW` | 用纯 C++ 正交最小二乘表达同一拟合目标，不复制绘图点类型 |
-| 缓和曲线识别 | `CH_V_Cal.cpp:1110-1476`：`IDSpiral_SW` | 保留直线段、曲线段及缓和段边界调整规则；将所有数组下标前置校验显式化 |
-| 交点计算与二次分段 | `CH_V_Cal.cpp:1477-1585`：`CalJDZB_SW`、`FormLineSeg2_SW` | 从相邻拟合直线求交点；退化平行线返回诊断而非弹窗 |
-| 圆拟合与初始缓长 | `CH_V_Cal.cpp:1586-1756`：`YNH2_SW`、`CalL02_SW`、`AtLeastOneCurvPt_SW` | 提取圆心/半径最小二乘、曲线点充分性和初始缓长估计 |
-| 全线交点输出 | `CH_V_Cal.cpp:1757-2035`：`AllQXNH2_SW` | 形成起点、中间交点、终点，输出 N/E、R、l1、l2；保留曲线点不足 3 个时的 TTP/TPP 数值分支，但要用独立纯数学实现和专门测试覆盖 |
-| 缓长估计与拨量优化 | `CH_V_Cal.cpp:2036-2644`：`CalL0_SW`、`YouHuaBL_SW`、`CalBL_SW`、`powell_SW`、`linmin_SW`、`mnbrak_SW`、`brent_SW` | 保留优化变量顺序 `(l1, R, l2)`、目标函数和停止条件；数值优化做成水平重构内部组件，不暴露旧 Numerical Recipes 风格数组 API |
-| 交点方案转线路 | `CH_V_Cal.cpp:2811-2889`：`TranLSXtoJYX_SW` | 只提取“交点结果可构造为可评估线路”的数据流；不创建 `RHA` 或 CAD 实体 |
+| 点序与累计距离 | `QXBoLiangCalDlg.cpp:70-157` → `CeDianNiHe.cpp:848-963`：`Sort`、`JMSurPtLC` | 旧界面会整理点序；公共契约要求调用方按线路方向给点，因此新库保留顺序、重复点和累计距离校验，不复制文件/UI 自动寻路 |
+| 曲率和初始属性 | `CeDianNiHe.cpp:964-1226`：`CalCurvature`、`GetCirByThreePointOnArc`、`MarkProperty` | 保留 15 m 前后搜索、三点切向/圆心状态、曲率和 `0.00008 1/m` 初始阈值的计算顺序 |
+| 直曲稳定化总顺序 | `QXBoLiangCalDlg.cpp:117-143`；`CeDianNiHe.cpp:1310-1838` | 严格按 `IDdentifyLineOrCurve` → 动态阈值 5 → `DealFanxiangQX` → `CalFJD` → `CheckCurve` → 空的 `Checkline` → 动态阈值 6 执行；不要调用同名 `New` 或注释分支 |
+| 直线段、拟合和交点有效性 | `CeDianNiHe.cpp:1373-1520`、`:2279-2431`：`FormLineSeg`、`IsIntersectionBetween`、`FitLine`、`FootPoint` | 保留连续区段形成、端点强制直线、相邻直线延长线判定和旧正交拟合的运算顺序；数组越界只做等价安全化，不改变有效输入结果 |
+| 反向曲线和短曲线 | `CeDianNiHe.cpp:1591-1731`：`CheckCurve`、`CalFJD`、`DealFanxiangQX` | 保留曲率符号反转时的 `0.0008 1/m` 再分类，以及长度小于 20 m 曲线段的处理 |
+| 缓和三态识别 | `QXBoLiangCalDlg.cpp:229-251` → `CeDianNiHe.cpp:2451-2882`：`IDSpiral`、`FormLineSeg2`、`AtLeastOneCurvPt`、`AtLeastOneLinePt` | 仅在 `CurvNum > 0` 时执行；保留 `Propert = 0/1/2` 的直线/圆/缓和边界调整、点数约束和 300 次活跃上限 |
+| 缓和边界摆动 | `CeDianNiHe.cpp:4692-4917`：`SwingAlgorithm` | `IDSpiral` 后继续用当前圆拟合、交点、初始缓长和线路投影反复重分三态，保留 500 次上限 |
+| 圆拟合、交点和初始缓长 | `CeDianNiHe.cpp:3504-3789`：`YNH2`、`CalJDZB`、`CalL0`、`CalL02` | 保留圆心先直接除以样本数再累积正规方程的浮点运算顺序、相邻拟合直线交点以及两端不等长缓和估计 |
+| 全线输出与优化 | `CeDianNiHe.cpp:2974-3283`、`:3792-4278`：`AllQXNH2`、`YouHuaBL`、`CalBL`、`powell`、`linmin`、`mnbrak`、`brent` | 形成起点、中间交点、终点并输出 N/E、R、l1、l2；`AllQXNH2` 当前无条件调用 `YouHuaBL`，变量顺序固定为 `(l1, R, l2)`，目标覆盖 `SNO .. 下一直线 ENO`，Powell 容差 `1e-4`、最多 10 次，`mnbrak` 最多 10 次；默认不等缓长且不取整 |
+| 曲线点少于 3 个 | `CeDianNiHe.cpp:3038-3106`：`AllQXNH2` 内的 `BCTTP`/`BCTPP` 活跃分支 | 这是稀疏曲线样本的可达分支；若迁移该边界，必须继续读取 `BCTTP`/`BCTPP` 的活跃纯数学逻辑并建立专门对照测试，不能用任意圆拟合替代 |
+| 方案转 typed 线路 | `AllQXNH2` 中 `m_SJD`/`pRHA_Opti` 数据流；`RHA.cpp:3348-4003` | 只提取“交点结果可构造并被 `CalBL` 投影评价”的数值行为；不创建 `RHA`、CAD 实体或十列裸数组 owner |
 
 ### 3.3 平面建线、按里程求点与最近投影
 
@@ -102,12 +106,12 @@
 
 实现时按以下优先级处理冲突：
 
-1. **A级：活跃联合调用链**——`OnBnClickedButtonCreatrailway`、`CalRectification`、`ZDMSJ` 联合调用、`MLToH_Bas`、单点 `CalTLDL`。这些代码决定公共行为。
+1. **A级：活跃业务调用链**——平面以 `OnBnClickedButtonZdfd` 和 `OnBnClickedButtonNhht` 为入口；联合调整量以 `CalRectification`、`ZDMSJ` 联合调用、`MLToH_Bas`、单点 `CalTLDL` 为入口。这些代码决定公共行为。
 2. **B级：活跃算法帮助函数**——上述表格列出的重构、建线、投影、竖曲线函数。用于复现数值步骤。
 3. **C级：显示和统计代码**——Excel、CAD 绘制、厘米/毫米格式化、汇总表。只能解释展示单位，不能反向改变主数值契约。
 4. **注释掉的旧实现**不得作为首选权威；只有活跃函数缺失公式且有测试证据时，才可作为调查线索。
 
-严禁直接复制到生产库：`CH_V_Cal`、`RHA`、`CDrawSlope` 整类，`CString`/`CArray`/`AcGe` 类型，CAD 绘图/文档锁/进度条，MDB/Excel 访问，全局 `g_ManageZDM`，以及十列裸线元数组作为新核心模型。
+严禁直接复制到生产库：`CCeDianNiHe`、`CH_V_Cal`、`RHA`、`CDrawSlope` 整类，`CString`/`CArray`/`AcGe` 类型，CAD 绘图/文档锁/进度条，MDB/Excel 访问，全局状态，以及十列裸线元数组作为新核心模型。
 
 每完成一个算法切片，Agent 必须记录“参考函数 → 新所有者 → 对照夹具 → 容差”，避免只抽取函数名而丢失调用顺序和参数来源。
 

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "strict-field-red",
+  "type": "test",
+  "source": "Debug AlignmentReconstruct.Tests.exe on 2026-07-16",
+  "summary": "Strict 0.001 m field parity test fails as expected: 22 controls retained; maxima coordinate 0.232059 m, radius 3.16358 m, entry spiral 5.92673 m, exit spiral 3.8956 m; other 28 tests pass.",
+  "verifier": "fresh VS2026 Debug build and test exit code 1"
+}

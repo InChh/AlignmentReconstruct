@@ -1,6 +1,7 @@
 #include "alignment_reconstruct/adjustment.h"
 #include "alignment_reconstruct/reconstruction.h"
 
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <vector>
@@ -8,10 +9,17 @@
 int main() {
     using namespace alignment_reconstruct;
 
+    constexpr double heading_rad = 0.2;
+    const double direction_x = std::cos(heading_rad);
+    const double direction_y = std::sin(heading_rad);
     std::vector<Point3D> measured_centerline;
     for (int index = 0; index <= 100; ++index) {
         const double station = 20.0 * static_cast<double>(index);
-        measured_centerline.push_back({station, 0.0, 100.0 + 0.005 * station});
+        measured_centerline.push_back({
+            station * direction_x,
+            station * direction_y,
+            100.0 + 0.005 * station
+        });
     }
 
     const ReconstructionResult reconstruction = reconstruct(measured_centerline);
@@ -25,9 +33,16 @@ int main() {
     alignment.horizontal = reconstruction.horizontal;
     alignment.vertical = reconstruction.vertical;
 
+    const auto offset_point = [=](double station_m, double offset_m, double z) {
+        return Point3D{
+            station_m * direction_x - offset_m * direction_y,
+            station_m * direction_y + offset_m * direction_x,
+            z
+        };
+    };
     const std::vector<Point3D> points_to_adjust{
-        {500.0, 1.5, 102.48},
-        {1500.0, -0.8, 107.53}
+        offset_point(500.0, 1.5, 102.48),
+        offset_point(1500.0, -0.8, 107.53)
     };
     const AdjustmentCalculationResult adjustments =
         calculate_adjustments(points_to_adjust, alignment);

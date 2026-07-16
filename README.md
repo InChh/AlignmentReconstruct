@@ -2,7 +2,7 @@
 
 `AlignmentReconstruct` 是面向普通 C++ 调用方的铁路线路数值静态库。它接收调用方已经准备好的内存数据，不读取 DWG、MDB、Excel，也不依赖 AutoCAD、ObjectARX 或 MFC。
 
-当前库提供两个公共入口：
+库提供两个公共入口：
 
 | 调用方需求 | 使用入口 |
 | --- | --- |
@@ -11,7 +11,18 @@
 
 公共头文件位于 `include/alignment_reconstruct/`，静态库文件名为 `AlignmentReconstruct.lib`。
 
-## 1. 调用前需要知道的约束
+## 1. 获取代码
+
+使用 Git 获取源码：
+
+```bash
+git clone https://github.com/InChh/AlignmentReconstruct.git
+cd AlignmentReconstruct
+```
+
+如果不使用 Git，也可以在 [GitHub 仓库主页](https://github.com/InChh/AlignmentReconstruct) 选择 `Code -> Download ZIP`，解压后进入 `AlignmentReconstruct` 根目录。
+
+## 2. 调用前需要知道的约束
 
 - 平台：Windows x64。
 - 工具集：Visual Studio 2026，项目文件使用 `v145`。
@@ -24,9 +35,9 @@
 
 静态库不需要初始化函数，也不需要复制 DLL。调用方负责文件读取、坐标转换、数据持久化和界面显示。
 
-## 2. 构建静态库
+## 3. 构建静态库
 
-### 2.1 使用 Visual Studio
+### 3.1 使用 Visual Studio
 
 1. 用 Visual Studio 2026 打开 `AlignmentReconstruct.sln`。
 2. 选择 `Debug | x64` 或 `Release | x64`。
@@ -37,7 +48,7 @@
 - Debug：`build/Debug/AlignmentReconstruct.lib`
 - Release：`build/Release/AlignmentReconstruct.lib`
 
-### 2.2 使用命令行
+### 3.2 使用命令行
 
 先确保 Visual Studio 的 `MSBuild.exe` 已加入当前 Git Bash 的 `PATH`，然后在库根目录执行：
 
@@ -49,9 +60,9 @@ MSYS2_ARG_CONV_EXCL='*' MSBuild.exe \
 
 需要调试版本时，把 `Release` 改为 `Debug`。
 
-## 3. 把库接入调用工程
+## 4. 把库接入调用工程
 
-### 3.1 推荐方式：在同一个解决方案中引用项目
+### 4.1 推荐方式：在同一个解决方案中引用项目
 
 1. 在调用方解决方案中选择“添加 → 现有项目”。
 2. 添加 `AlignmentReconstruct.vcxproj`。
@@ -66,7 +77,7 @@ MSYS2_ARG_CONV_EXCL='*' MSBuild.exe \
 
 如果调用方本身也是静态库，最终生成 EXE 或 DLL 的项目仍必须链接 `AlignmentReconstruct.lib`。
 
-### 3.2 使用预编译 `.lib`
+### 4.2 使用预编译 `.lib`
 
 在调用方 EXE/DLL 项目中配置：
 
@@ -75,8 +86,7 @@ MSYS2_ARG_CONV_EXCL='*' MSBuild.exe \
 | C/C++ → 常规 → 附加包含目录 | `<AlignmentReconstruct根目录>\include` |
 | 链接器 → 常规 → 附加库目录 | `<AlignmentReconstruct根目录>\build\Release` |
 | 链接器 → 输入 → 附加依赖项 | `AlignmentReconstruct.lib` |
-| C/C++ → 语言 → C++ 语言标准 | ISO C++17 或更高
-|
+| C/C++ → 语言 → C++ 语言标准 | ISO C++17 或更高 |
 | 配置管理器 → 平台 | x64 |
 
 Debug 配置应改用 `build/Debug/AlignmentReconstruct.lib`。如果调用方使用 `/MT`、自定义迭代器调试级别或其他非默认运行库设置，应使用相同设置重新编译本库，避免 `LNK2038` 等 ABI 不匹配错误。
@@ -88,7 +98,7 @@ Debug 配置应改用 `build/Debug/AlignmentReconstruct.lib`。如果调用方�
 #include <alignment_reconstruct/adjustment.h>
 ```
 
-## 4. 五分钟可运行示例
+## 5. 五分钟可运行示例
 
 下面的程序构造一条 2 km 直线和一条 5‰ 纵坡，然后计算两个测点的拨量与抬落道量：
 
@@ -148,9 +158,9 @@ index=1, station=2500 m, offset=-800 mm, lift/drop=-50 mm
 
 这也可以作为调用方完成链接后的第一项冒烟检查。
 
-## 5. 坐标、里程和正负号
+## 6. 坐标、里程和正负号
 
-### 5.1 坐标与里程
+### 6.1 坐标与里程
 
 | 字段 | 语义 |
 | --- | --- |
@@ -164,7 +174,7 @@ index=1, station=2500 m, offset=-800 mm, lift/drop=-50 mm
 
 `VerticalControlPoint::station_m` 不是点序号，也不是输入测点折线累计长。它必须与平面线路计算出来的 station 使用同一基准。
 
-### 5.2 拨量
+### 6.2 拨量
 
 `horizontal_offset_m` 表示测点相对输入方案线的位置偏差：
 
@@ -174,9 +184,9 @@ index=1, station=2500 m, offset=-800 mm, lift/drop=-50 mm
 
 `horizontal_offset_mm()` 只是 `horizontal_offset_m * 1000` 的便捷值。
 
-如果调用方业务中的“拨道指令”表示“把实测点移动到方案线”的动作方向，那么动作方向与上述位置偏差方向相反。库返回的是已验证旧工程口径的带符号位置偏差，业务层应明确是否需要转换。
+如果调用方业务中的“拨道指令”表示“把实测点移动到方案线”的动作方向，那么动作方向与上述位置偏差方向相反。库返回的是测点相对方案线的带符号位置偏差，业务层应明确是否需要转换。
 
-### 5.3 抬落道量
+### 6.3 抬落道量
 
 ```text
 lift_drop_m = design_elevation_m - measured_z
@@ -188,9 +198,9 @@ lift_drop_m = design_elevation_m - measured_z
 
 拨量和设计高程始终使用同一个平面投影 `station_m`，不会各自计算两套里程。
 
-## 6. API 一：根据 XYZ 测点重构线路
+## 7. API 一：根据 XYZ 测点重构线路
 
-### 6.1 函数签名
+### 7.1 函数签名
 
 ```cpp
 ReconstructionResult reconstruct(
@@ -198,7 +208,7 @@ ReconstructionResult reconstruct(
     const ReconstructionOptions& options = {});
 ```
 
-### 6.2 输入要求
+### 7.2 输入要求
 
 `ordered_points` 必须满足：
 
@@ -213,7 +223,7 @@ ReconstructionResult reconstruct(
 
 如果只有 N/E、没有真实 z，可以使用常量 z 临时验证平面重构，但由此得到的纵断面没有业务意义，不能当作真实纵断面成果。
 
-### 6.3 调用示例
+### 7.3 调用示例
 
 ```cpp
 #include <alignment_reconstruct/reconstruction.h>
@@ -267,7 +277,7 @@ int main() {
 }
 ```
 
-### 6.4 输出字段
+### 7.4 输出字段
 
 `ReconstructionResult`：
 
@@ -297,9 +307,9 @@ int main() {
 | `elevation_m` | 相邻直坡段延长线的交点高程 |
 | `vertical_curve_radius_m` | 物理圆竖曲线半径；0 表示该变坡点不设竖曲线 |
 
-## 7. API 二：计算拨量和抬落道量
+## 8. API 二：计算拨量和抬落道量
 
-### 7.1 函数签名
+### 8.1 函数签名
 
 ```cpp
 AdjustmentCalculationResult calculate_adjustments(
@@ -309,7 +319,7 @@ AdjustmentCalculationResult calculate_adjustments(
 
 与 `reconstruct` 不同，`points` 不要求按 station 排序。每个点独立投影，输出顺序与输入顺序完全一致，`point_index` 是原输入下标。
 
-### 7.2 构造平面方案
+### 8.2 构造平面方案
 
 ```cpp
 AlignmentDefinition alignment;
@@ -334,7 +344,7 @@ alignment.horizontal = {
 - 相邻控制点不能重合。
 - 半径、转角和缓长必须能形成不重叠且连续的直线—缓和曲线—圆曲线—缓和曲线组合。
 
-### 7.3 构造纵断面方案
+### 8.3 构造纵断面方案
 
 ```cpp
 alignment.vertical = {
@@ -350,11 +360,11 @@ alignment.vertical = {
 - 第一、最后一个控制点的竖曲线半径必须为 0。
 - 中间点半径为 0 时表示折坡但不设竖曲线。
 - 非零半径必须是大于等于 `100 m` 的物理半径。
-- 不支持旧工程中小于 100 的特殊编码值。
+- 半径必须填写实际物理半径，不支持用小于 100 的数值表示特殊编码。
 - 竖曲线不能超出相邻坡段，也不能互相重叠。
 - 纵断面起终里程必须覆盖完整平面线路范围，否则返回 `vertical_range_mismatch`。
 
-### 7.4 读取计算结果
+### 8.4 读取计算结果
 
 ```cpp
 const AdjustmentCalculationResult result =
@@ -381,7 +391,7 @@ for (const PointAdjustment& point : result.points) {
 - `circular`
 - `exit_spiral`
 
-### 7.5 把重构结果直接用于调整量计算
+### 8.5 把重构结果直接用于调整量计算
 
 ```cpp
 ReconstructionOptions options;
@@ -403,7 +413,7 @@ const AdjustmentCalculationResult adjustments =
 
 `ReconstructionResult` 本身不重复保存 `start_station_m`。调用方把重构结果装入 `AlignmentDefinition` 时，必须沿用当次 `ReconstructionOptions::start_station_m`；否则所有里程会整体错位。
 
-### 7.6 修改重构方案后重新计算
+### 8.6 修改重构方案后重新计算
 
 调用方可以修改重构出来的交点、半径或缓长，再调用 `calculate_adjustments`：
 
@@ -421,19 +431,19 @@ const AdjustmentCalculationResult changed =
 
 修改平面交点可能改变线路总长。此时必须确认纵断面 station 仍覆盖修改后的完整平面范围，并根据业务需要同步调整纵断面方案；否则接口会返回 `vertical_range_mismatch`。不要为了绕过该错误而随意伪造变坡点。
 
-## 8. 重构参数 `ReconstructionOptions`
+## 9. 重构参数 `ReconstructionOptions`
 
-默认参数用于已验证的旧工程行为。调用方第一次接入时建议先使用默认值，只有在已知样本上确认分类或拟合不合适时再逐项调整。
+调用方第一次接入时建议先使用默认参数，只有在已知样本上确认分类或拟合不合适时再逐项调整。
 
 | 参数 | 默认值 | 单位/说明 |
 | --- | ---: | --- |
 | `start_station_m` | `0` | 线路起点里程，m |
 | `curvature_window_m` | `15` | 平面切向和曲率分析窗口，m |
 | `curvature_threshold_inverse_m` | `0.00008` | 直/曲分类阈值，`1/m`；降低会把更多样本判为曲线 |
-| `minimum_curve_sample_count` | `4` | 一个曲线分类段的最少样本数 |
-| `maximum_spiral_classification_iterations` | `100` | 分类稳定化最大迭代次数 |
-| `horizontal_optimization_tolerance` | `1e-5` | 半径和缓长优化的相对收敛容差 |
-| `horizontal_optimization_max_iterations` | `200` | 平面优化最大迭代次数 |
+| `minimum_curve_sample_count` | `3` | 一个圆曲线分类段必须保留的最少样本数 |
+| `maximum_spiral_classification_iterations` | `300` | 缓和曲线分类稳定化最大迭代次数 |
+| `horizontal_optimization_tolerance` | `1e-4` | 半径和缓长 Powell 优化的相对收敛容差 |
+| `horizontal_optimization_max_iterations` | `10` | 平面 Powell 优化最大迭代次数 |
 | `vertical_second_difference_threshold_candidates` | `1e-7 ... 1e-5` | 纵面二阶差商分类候选阈值集合 |
 | `minimum_grade_length_m` | `400` | 小于该长度的短坡段会参与合并，m；0 表示不按长度合并 |
 | `maximum_up_grade` | `0` | 最大上坡坡度，‰；0 表示不限制 |
@@ -453,7 +463,7 @@ const AdjustmentCalculationResult changed =
 3. 同时比较控制点数量、交点坐标、半径、缓长、变坡点、拨量和抬落道量。
 4. 不要只以“接口成功返回”作为参数合理的依据。
 
-## 9. 错误处理
+## 10. 错误处理
 
 两个公共函数都通过结果对象返回状态：
 
@@ -502,7 +512,7 @@ bool report_errors(const Result& result) {
 
 当错误不对应某一个输入点时，`Diagnostic::input_index` 为 `no_input_index`。
 
-## 10. 常见接入问题
+## 11. 常见接入问题
 
 | 现象 | 优先检查 |
 | --- | --- |
@@ -517,7 +527,7 @@ bool report_errors(const Result& result) {
 | 纵面控制点过少或位置被归整 | 检查二阶差商阈值、`minimum_grade_length_m`、`station_rounding_m` 和坡度归整参数 |
 | 输入只有 N/E | 可以验证平面，但没有真实 z 就不能得到有意义的纵断面或抬落道量 |
 
-## 11. 测试和调用示例
+## 12. 运行测试和示例
 
 构建整个解决方案后运行：
 
@@ -526,68 +536,31 @@ bool report_errors(const Result& result) {
 ./build/Debug/AlignmentReconstruct.Sample.exe
 ```
 
-当前自动化测试覆盖：
+自动化测试覆盖：
 
 - 直线、圆曲线、进出口 Euler 缓和曲线。
 - 平面建线、按里程求点、最近投影和右正左负拨量。
 - 圆竖曲线、变坡点、设计高程和抬落道量。
 - 平纵重构闭环。
 - 重构后修改交点，再使用 `calculate_adjustments` 计算原测点拨量。
-- 可选的私有现场数据回归：测点、平面控制点和权威拨量逐字段对照。
 - Debug/Release x64 构建。
-
-公开仓库不包含现场 CSV 测点和线路数据。这些文件受 `.gitignore` 保护，只能由有权限的维护者放入本地 `tests/fixtures/`；缺失时，依赖现场数据的测试会明确显示 `[SKIP]`，其余确定性测试仍正常执行。私有夹具的文件名和数据契约见 `tests/fixtures/README.md`。测试专用旧公式位于 `tests/legacy_reference/`，不会链接进生产静态库。
 
 完整可运行的双 API 示例位于 `samples/main.cpp`。
 
-## 12. 交付给其他调用方时需要哪些文件
-
-最小 Release 交付内容：
-
-```text
-include/
-  alignment_reconstruct/
-    adjustment.h
-    reconstruction.h
-    types.h
-lib/
-  AlignmentReconstruct.lib
-README.md
-```
-
-其中 `lib/AlignmentReconstruct.lib` 可以直接取自 `build/Release/AlignmentReconstruct.lib`。如果接收方需要调试，应另外提供 Debug 库并明确区分目录，不能用同名文件互相覆盖。
-
-建议同时告知接收方：
-
-- 构建工具集和平台。
-- 使用的 Debug/Release 与 MSVC 运行库设置。
-- 坐标轴、里程基准、单位和拨量正负号。
-- 使用的 `ReconstructionOptions` 非默认值。
-- 线路方案中竖曲线半径的物理含义。
-
-## 13. 项目结构与功能边界
+## 13. 常用文件位置与功能边界
 
 ```text
 include/alignment_reconstruct/   公共头文件
-src/horizontal/                  平面线元、线路、投影和平面重构
-src/vertical/                    纵面求值和纵面重构
-src/alignment/                   拨量/抬落道联合编排
-samples/                         调用示例
-tests/                           自动化测试与本地夹具
-tools/                           可选的测试数据导出工具
-docs/                            设计、架构和验证记录
+samples/main.cpp                 完整调用示例
+build/Debug/                     Debug 静态库、测试程序和示例程序
+build/Release/                   Release 静态库、测试程序和示例程序
 ```
 
-当前明确不包含：
+本库不提供：
 
 - CAD 绘图、DWG 实体和 AutoCAD 命令。
 - ARX/MFC 类型或运行时。
 - Excel/MDB 文件读取。
 - 无序测点自动寻路。
 - 三维最短空间距离或综合移动量。
-- 旧 VS2012/v110 ABI 兼容。
-
-需要了解算法来源、兼容边界和验证误差时，参阅：
-
-- `docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md`
-- `docs/verification/2026-07-13-build-and-parity.md`
+- 与 VS2012/v110 生成程序的二进制 ABI 兼容。

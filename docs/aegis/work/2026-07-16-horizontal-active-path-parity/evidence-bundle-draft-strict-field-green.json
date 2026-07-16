@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "strict-field-green",
+  "type": "test",
+  "source": "Visual Studio 2026 Debug and Release AlignmentReconstruct.Tests.exe on 2026-07-16",
+  "summary": "22 control points and types match; maxima coordinate 0.000000649004 m, radius 0.000417710 m, entry spiral 0.000433860 m, exit spiral 0.000482413 m; all below 0.001 m in Debug and Release; 30 tests pass in each configuration.",
+  "verifier": "fresh Debug and Release Rebuild, tests, and sample exit code 0"
+}

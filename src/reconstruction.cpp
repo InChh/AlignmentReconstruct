@@ -37,6 +37,7 @@ bool finite_options(const ReconstructionOptions& options) {
         !std::isfinite(options.maximum_up_grade) ||
         !std::isfinite(options.maximum_down_grade) ||
         !std::isfinite(options.maximum_grade_difference_per_mille) ||
+        !std::isfinite(options.minimum_vertical_curve_grade_difference_per_mille) ||
         !std::isfinite(options.minimum_vertical_curve_radius_m) ||
         !std::isfinite(options.maximum_vertical_curve_radius_m) ||
         !std::isfinite(options.vertical_curve_radius_rounding_m) ||
@@ -69,8 +70,10 @@ ReconstructionResult reconstruct(
         options.horizontal_optimization_tolerance <= 0.0 ||
         options.horizontal_optimization_max_iterations < 1 ||
         options.minimum_grade_length_m < 0.0 ||
+        options.minimum_vertical_curve_grade_difference_per_mille < 0.0 ||
         options.minimum_vertical_curve_radius_m <= 0.0 ||
         options.maximum_vertical_curve_radius_m < options.minimum_vertical_curve_radius_m ||
+        options.maximum_vertical_curve_radius_m > 30000.0 ||
         options.vertical_curve_radius_rounding_m < 0.0 ||
         options.grade_rounding_per_mille < 0.0 ||
         options.station_rounding_m < 0.0 ||
@@ -123,7 +126,18 @@ ReconstructionResult reconstruct(
             result.projected_stations_m.push_back(projection.station_m);
             vertical_samples.push_back({projection.station_m, ordered_points[index].z});
         }
-        const detail::VerticalReconstructor vertical_reconstructor(options);
+        std::vector<detail::HorizontalSpiralInterval> horizontal_spirals;
+        for (const auto& element : horizontal.elements()) {
+            if ((element.kind() == HorizontalElementKind::entry_spiral ||
+                 element.kind() == HorizontalElementKind::exit_spiral) &&
+                element.length_m() > 0.001) {
+                horizontal_spirals.push_back({
+                    element.start_station_m(), element.end_station_m()
+                });
+            }
+        }
+        const detail::VerticalReconstructor vertical_reconstructor(
+            options, std::move(horizontal_spirals));
         result.vertical = vertical_reconstructor.reconstruct(vertical_samples);
         return result;
     } catch (const std::invalid_argument& error) {

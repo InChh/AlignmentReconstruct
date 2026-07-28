@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [
+    "vertical reconstruction implementation and verification"
+  ],
+  "owners": [
+    "VerticalReconstructor"
+  ],
+  "invariants": [
+    "所有输入点参与；平面投影station是纵面唯一里程；不引入第二个生产实现。"
+  ],
+  "compatBoundary": "保持C++17纯标准库、公共API和物理竖曲线半径语义不变。",
+  "nonGoals": [
+    "不修改旧ObjectARX工程；不公开XLSX/MDB/CSV；不改变已验证平面算法。"
+  ]
+}

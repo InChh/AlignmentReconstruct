@@ -28,3 +28,16 @@
 | 2026-07-16 | artifact | docs/aegis/work/2026-07-16-horizontal-active-path-parity/resume-state-hint.json | 2026-07-16-horizontal-active-path-parity resume state hint |
 | 2026-07-16 | artifact | docs/aegis/work/2026-07-16-horizontal-active-path-parity/gate-input-pack.json | 2026-07-16-horizontal-active-path-parity gate input pack |
 | 2026-07-16 | work | docs/aegis/work/2026-07-16-horizontal-active-path-parity/proof-bundle.md | 2026-07-16-horizontal-active-path-parity proof bundle |
+| 2026-07-27 | work | docs/aegis/work/2026-07-27-vertical-active-path-parity/10-intent.md | 纵断面活跃路径迁移与MDB一致性 intent |
+| 2026-07-27 | work | docs/aegis/work/2026-07-27-vertical-active-path-parity/20-checkpoint.md | 纵断面活跃路径迁移与MDB一致性 checkpoint |
+| 2026-07-27 | work | docs/aegis/work/2026-07-27-vertical-active-path-parity/90-evidence.md | 纵断面活跃路径迁移与MDB一致性 evidence |
+| 2026-07-27 | work | docs/aegis/work/2026-07-27-vertical-active-path-parity/99-reflection.md | 纵断面活跃路径迁移与MDB一致性 reflection |
+| 2026-07-27 | artifact | docs/aegis/work/2026-07-27-vertical-active-path-parity/task-intent-draft.json | 纵断面活跃路径迁移与MDB一致性 task intent draft |
+| 2026-07-27 | artifact | docs/aegis/work/2026-07-27-vertical-active-path-parity/baseline-read-set-hint.json | 纵断面活跃路径迁移与MDB一致性 baseline read-set hint |
+| 2026-07-27 | artifact | docs/aegis/work/2026-07-27-vertical-active-path-parity/baseline-usage-draft.json | 纵断面活跃路径迁移与MDB一致性 baseline usage draft |
+| 2026-07-27 | artifact | docs/aegis/work/2026-07-27-vertical-active-path-parity/impact-statement-draft.json | 纵断面活跃路径迁移与MDB一致性 impact statement draft |
+| 2026-07-27 | artifact | docs/aegis/work/2026-07-27-vertical-active-path-parity/todo-checkpoint-draft.json | 纵断面活跃路径迁移与MDB一致性 todo checkpoint draft |
+| 2026-07-27 | artifact | docs/aegis/work/2026-07-27-vertical-active-path-parity/drift-check-draft.json | 纵断面活跃路径迁移与MDB一致性 drift check draft |
+| 2026-07-27 | work | docs/aegis/work/2026-07-27-vertical-active-path-parity/30-runtime-reference-correction.md | 纵断面真实运行权威路径修正 |
+| 2026-07-27 | artifact | docs/aegis/work/2026-07-27-vertical-active-path-parity/gate-input-pack.json | 纵断面活跃路径迁移 gate input pack |
+| 2026-07-27 | work | docs/aegis/work/2026-07-27-vertical-active-path-parity/proof-bundle.md | 纵断面活跃路径迁移 proof bundle |

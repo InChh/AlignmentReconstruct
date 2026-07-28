@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "baselineRefs": [
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md; docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md; CRebuildDlg到CReBuildGMX真实运行路径"
+  ],
+  "impactStatement": "docs/aegis/work/2026-07-27-vertical-active-path-parity/impact-statement-draft.json",
+  "compatPlan": "保持C++17纯标准库、公共API和物理竖曲线半径语义不变。",
+  "retirementPlan": "single-owner-preserved",
+  "evidenceBundle": []
+}

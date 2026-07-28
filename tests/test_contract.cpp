@@ -56,3 +56,29 @@ AR_TEST(default_options_preserve_confirmed_horizontal_thresholds) {
     AR_EXPECT_NEAR(options.horizontal_optimization_tolerance, 1.0e-4, 0.0);
     AR_EXPECT(options.horizontal_optimization_max_iterations == 10);
 }
+
+AR_TEST(default_options_preserve_the_rebuild_dialog_vertical_parameters) {
+    const ReconstructionOptions options;
+    const std::vector<double> expected{0.001};
+    AR_EXPECT(
+        options.vertical_second_difference_threshold_candidates == expected);
+    AR_EXPECT_NEAR(options.minimum_grade_length_m, 350.0, 0.0);
+    AR_EXPECT_NEAR(options.maximum_up_grade, 25.0, 0.0);
+    AR_EXPECT_NEAR(options.maximum_down_grade, 25.0, 0.0);
+    AR_EXPECT_NEAR(options.maximum_grade_difference_per_mille, 7.0, 0.0);
+    AR_EXPECT_NEAR(
+        options.minimum_vertical_curve_grade_difference_per_mille,
+        3.0,
+        0.0);
+    AR_EXPECT_NEAR(options.minimum_vertical_curve_radius_m, 10000.0, 0.0);
+    AR_EXPECT_NEAR(options.maximum_vertical_curve_radius_m, 30000.0, 0.0);
+}
+
+AR_TEST(public_reconstruction_rejects_a_vertical_radius_limit_above_the_active_cap) {
+    ReconstructionOptions options;
+    options.maximum_vertical_curve_radius_m = 30000.1;
+    const auto result = reconstruct(
+        {{0.0, 0.0, 0.0}, {1000.0, 0.0, 1.0}},
+        options);
+    AR_EXPECT(result.status == StatusCode::invalid_input);
+}

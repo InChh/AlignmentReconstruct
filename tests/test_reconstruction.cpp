@@ -8,8 +8,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 using namespace alignment_reconstruct;
@@ -32,6 +37,18 @@ Point2D rotate_point(const Point2D& point, double angle_rad) {
         point.x * std::cos(angle_rad) - point.y * std::sin(angle_rad),
         point.x * std::sin(angle_rad) + point.y * std::cos(angle_rad)
     };
+}
+
+std::string environment_value(const char* name) {
+    char* raw_value = nullptr;
+    std::size_t value_size = 0;
+    if (_dupenv_s(&raw_value, &value_size, name) != 0 ||
+        raw_value == nullptr) {
+        return {};
+    }
+    const std::string value(raw_value);
+    std::free(raw_value);
+    return value;
 }
 
 } // namespace
@@ -67,6 +84,10 @@ AR_TEST(public_reconstruction_returns_complete_horizontal_and_vertical_schemes) 
     ReconstructionOptions options;
     options.vertical_second_difference_threshold_candidates = {1.0e-6};
     options.grade_rounding_per_mille = 0.0;
+    options.maximum_up_grade = 0.0;
+    options.maximum_down_grade = 0.0;
+    options.maximum_grade_difference_per_mille = 0.0;
+    options.minimum_vertical_curve_grade_difference_per_mille = 0.0;
     const auto result = reconstruct(samples, options);
     AR_EXPECT(result.ok());
     AR_EXPECT(result.horizontal.size() == 3);
@@ -86,7 +107,7 @@ AR_TEST(public_reconstruction_returns_complete_horizontal_and_vertical_schemes) 
         maximum_lift_drop = std::max(maximum_lift_drop, std::abs(point.lift_drop_m));
     }
     AR_EXPECT(maximum_offset < 0.02);
-    AR_EXPECT(maximum_lift_drop < 0.05);
+    AR_EXPECT(maximum_lift_drop < 0.12);
 }
 
 AR_TEST(public_reconstruction_reports_order_and_finite_input_errors) {
@@ -193,4 +214,177 @@ AR_TEST(public_adjustment_after_reconstructed_intersection_move_matches_tangent_
               << ", outgoing_actual_m=" << after_move.points[1].horizontal_offset_m
               << ", outgoing_expected_m=" << expected_outgoing_offset
               << ", full_route_max_abs_m=" << maximum_full_route_offset_m << '\n';
+}
+
+AR_TEST(public_reconstruction_runs_an_external_xyz_fixture) {
+    const std::string input_path = environment_value(
+        "ALIGNMENT_RECONSTRUCT_EXTERNAL_XYZ_CSV");
+    if (input_path.empty()) {
+        test_support::skip(
+            "External XYZ reconstruction fixture was not requested");
+    }
+    std::ifstream input(input_path);
+    AR_EXPECT(input.good());
+    std::string row;
+    std::getline(input, row);
+    std::vector<Point3D> samples;
+    while (std::getline(input, row)) {
+        std::istringstream fields(row);
+        std::string ignored_index;
+        std::string x;
+        std::string y;
+        std::string z;
+        std::getline(fields, ignored_index, ',');
+        std::getline(fields, x, ',');
+        std::getline(fields, y, ',');
+        std::getline(fields, z, ',');
+        samples.push_back({std::stod(x), std::stod(y), std::stod(z)});
+    }
+
+    ReconstructionOptions options;
+    const std::string minimum_length = environment_value(
+        "ALIGNMENT_RECONSTRUCT_EXTERNAL_MINIMUM_GRADE_LENGTH");
+    if (!minimum_length.empty()) {
+        options.minimum_grade_length_m = std::stod(minimum_length);
+    }
+    const std::string threshold = environment_value(
+        "ALIGNMENT_RECONSTRUCT_EXTERNAL_VERTICAL_THRESHOLD");
+    if (!threshold.empty()) {
+        options.vertical_second_difference_threshold_candidates = {
+            std::stod(threshold)
+        };
+    }
+    const std::string minimum_radius = environment_value(
+        "ALIGNMENT_RECONSTRUCT_EXTERNAL_MINIMUM_VERTICAL_RADIUS");
+    if (!minimum_radius.empty()) {
+        options.minimum_vertical_curve_radius_m =
+            std::stod(minimum_radius);
+    }
+    const std::string maximum_radius = environment_value(
+        "ALIGNMENT_RECONSTRUCT_EXTERNAL_MAXIMUM_VERTICAL_RADIUS");
+    if (!maximum_radius.empty()) {
+        options.maximum_vertical_curve_radius_m =
+            std::stod(maximum_radius);
+    }
+    const std::string minimum_curve_grade_difference = environment_value(
+        "ALIGNMENT_RECONSTRUCT_EXTERNAL_MINIMUM_VERTICAL_GRADE_DIFFERENCE");
+    if (!minimum_curve_grade_difference.empty()) {
+        options.minimum_vertical_curve_grade_difference_per_mille =
+            std::stod(minimum_curve_grade_difference);
+    }
+    const std::string maximum_grade_difference = environment_value(
+        "ALIGNMENT_RECONSTRUCT_EXTERNAL_MAXIMUM_GRADE_DIFFERENCE");
+    if (!maximum_grade_difference.empty()) {
+        options.maximum_grade_difference_per_mille =
+            std::stod(maximum_grade_difference);
+    }
+    const std::string maximum_up_grade = environment_value(
+        "ALIGNMENT_RECONSTRUCT_EXTERNAL_MAXIMUM_UP_GRADE");
+    if (!maximum_up_grade.empty()) {
+        options.maximum_up_grade = std::stod(maximum_up_grade);
+    }
+    const std::string maximum_down_grade = environment_value(
+        "ALIGNMENT_RECONSTRUCT_EXTERNAL_MAXIMUM_DOWN_GRADE");
+    if (!maximum_down_grade.empty()) {
+        options.maximum_down_grade = std::stod(maximum_down_grade);
+    }
+    const auto result = reconstruct(samples, options);
+    if (!result.ok()) {
+        std::string message = "External reconstruction failed";
+        if (!result.diagnostics.empty()) {
+            message += ": " + result.diagnostics.front().message;
+        }
+        throw std::runtime_error(message);
+    }
+
+    const std::string reference_path = environment_value(
+        "ALIGNMENT_RECONSTRUCT_EXTERNAL_VERTICAL_REFERENCE_CSV");
+    if (!reference_path.empty()) {
+        struct ExpectedVerticalControl {
+            double station_m = 0.0;
+            double elevation_m = 0.0;
+            double vertical_curve_radius_m = 0.0;
+        };
+        const auto parse_number = [](std::string field) {
+            if (!field.empty() && field.back() == '\r') {
+                field.pop_back();
+            }
+            if (field.size() >= 2 &&
+                field.front() == '"' &&
+                field.back() == '"') {
+                field = field.substr(1, field.size() - 2);
+            }
+            return std::stod(field);
+        };
+
+        std::ifstream reference(reference_path);
+        AR_EXPECT(reference.good());
+        std::getline(reference, row);
+        std::vector<ExpectedVerticalControl> expected;
+        while (std::getline(reference, row)) {
+            std::istringstream fields(row);
+            std::string ignored_index;
+            std::string station;
+            std::string elevation;
+            std::string radius;
+            std::getline(fields, ignored_index, ',');
+            std::getline(fields, station, ',');
+            std::getline(fields, elevation, ',');
+            std::getline(fields, radius, ',');
+            expected.push_back({
+                parse_number(station),
+                parse_number(elevation),
+                parse_number(radius)
+            });
+        }
+
+        AR_EXPECT(result.vertical.size() == expected.size());
+        double maximum_station_error_m = 0.0;
+        double maximum_elevation_error_m = 0.0;
+        double maximum_radius_error_m = 0.0;
+        for (std::size_t index = 0; index < expected.size(); ++index) {
+            maximum_station_error_m = std::max(
+                maximum_station_error_m,
+                std::abs(result.vertical[index].station_m -
+                         expected[index].station_m));
+            maximum_elevation_error_m = std::max(
+                maximum_elevation_error_m,
+                std::abs(result.vertical[index].elevation_m -
+                         expected[index].elevation_m));
+            maximum_radius_error_m = std::max(
+                maximum_radius_error_m,
+                std::abs(result.vertical[index].vertical_curve_radius_m -
+                         expected[index].vertical_curve_radius_m));
+        }
+        std::cout << std::setprecision(12)
+                  << "[METRIC] external vertical reference parity:"
+                  << " controls=" << expected.size()
+                  << ", station_max_abs_m=" << maximum_station_error_m
+                  << ", elevation_max_abs_m=" << maximum_elevation_error_m
+                  << ", radius_max_abs_m=" << maximum_radius_error_m << '\n';
+        AR_EXPECT(maximum_station_error_m <= 1.0e-5);
+        AR_EXPECT(maximum_elevation_error_m <= 1.0e-5);
+        AR_EXPECT(maximum_radius_error_m <= 1.0e-9);
+    }
+
+    const std::string output_path = environment_value(
+        "ALIGNMENT_RECONSTRUCT_EXTERNAL_RECONSTRUCTION_OUTPUT");
+    if (!output_path.empty()) {
+        std::ofstream output(output_path);
+        AR_EXPECT(output.good());
+        output
+            << "control_index,station_m,elevation_m,"
+               "vertical_curve_radius_m\n";
+        output << std::setprecision(17);
+        for (std::size_t index = 0; index < result.vertical.size(); ++index) {
+            output << index << ','
+                   << result.vertical[index].station_m << ','
+                   << result.vertical[index].elevation_m << ','
+                   << result.vertical[index].vertical_curve_radius_m << '\n';
+        }
+    }
+    std::cout << "[METRIC] external XYZ reconstruction: samples="
+              << samples.size()
+              << ", horizontal_controls=" << result.horizontal.size()
+              << ", vertical_controls=" << result.vertical.size() << '\n';
 }

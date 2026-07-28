@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-07-27-vertical-active-path-parity",
+  "requiredBaselineRefs": [
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md",
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md",
+    "ZDMSJ到CRebuildDlg和CReBuildGMX的真实运行路径及其参考坡度表"
+  ],
+  "deliveredContextRefs": [
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md#34"
+  ],
+  "acknowledgedBeforePlanRefs": [
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md",
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md",
+    "ZDMSJ.cpp、RebuildDlg.cpp、ReBuildGMX.cpp、DrawSlope.cpp、BAS_CALC_FUN.cpp当前未注释执行链"
+  ],
+  "citedInPlanRefs": [
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md#34"
+  ],
+  "missingRefs": [],
+  "decision": "continue"
+}

@@ -433,7 +433,7 @@ const AdjustmentCalculationResult changed =
 
 ## 9. 重构参数 `ReconstructionOptions`
 
-调用方第一次接入时建议先使用默认参数，只有在已知样本上确认分类或拟合不合适时再逐项调整。
+默认纵断面参数对应参考项目“拟合坡度参数设置”中当前既有线圆曲线方案。线路采用不同技术标准时，调用方应在调用 `reconstruct` 前覆盖相应字段。
 
 | 参数 | 默认值 | 单位/说明 |
 | --- | ---: | --- |
@@ -444,16 +444,17 @@ const AdjustmentCalculationResult changed =
 | `maximum_spiral_classification_iterations` | `300` | 缓和曲线分类稳定化最大迭代次数 |
 | `horizontal_optimization_tolerance` | `1e-4` | 半径和缓长 Powell 优化的相对收敛容差 |
 | `horizontal_optimization_max_iterations` | `10` | 平面 Powell 优化最大迭代次数 |
-| `vertical_second_difference_threshold_candidates` | `1e-7 ... 1e-5` | 纵面二阶差商分类候选阈值集合 |
-| `minimum_grade_length_m` | `400` | 小于该长度的短坡段会参与合并，m；0 表示不按长度合并 |
-| `maximum_up_grade` | `0` | 最大上坡坡度，‰；0 表示不限制 |
-| `maximum_down_grade` | `0` | 最大下坡坡度绝对值，‰；0 表示不限制 |
-| `maximum_grade_difference_per_mille` | `0` | 相邻坡段最大坡差，‰；0 表示不限制 |
-| `minimum_vertical_curve_radius_m` | `1000` | 竖曲线拟合搜索下限，m |
-| `maximum_vertical_curve_radius_m` | `40000` | 竖曲线拟合搜索上限，m |
+| `vertical_second_difference_threshold_candidates` | `{0.001}` | 纵面二阶差商阈值。单元素表示固定阈值；传入多个候选时，库逐一完成重构并按参考项目的厘米级抬落道平方和选优 |
+| `minimum_grade_length_m` | `350` | 小于该长度的短坡段会参与合并，m；0 表示不按长度合并 |
+| `maximum_up_grade` | `25` | 最大上坡坡度，‰；0 表示不限制 |
+| `maximum_down_grade` | `25` | 最大下坡坡度绝对值，‰；0 表示不限制 |
+| `maximum_grade_difference_per_mille` | `7` | 相邻坡段最大坡差，‰；0 表示不限制 |
+| `minimum_vertical_curve_grade_difference_per_mille` | `3` | 设置竖曲线的最小坡度代数差，‰；0 表示所有非零坡差均参与半径拟合 |
+| `minimum_vertical_curve_radius_m` | `10000` | 竖曲线拟合初值和下限，m |
+| `maximum_vertical_curve_radius_m` | `30000` | 竖曲线拟合上限，m；参考项目活跃算法的硬上限为 30000，不允许设置得更大 |
 | `vertical_curve_radius_rounding_m` | `100` | 竖曲线半径向下归整步长，m；0 表示不归整 |
 | `grade_rounding_per_mille` | `0.01` | 坡度归整步长，‰；0 表示不归整 |
-| `station_rounding_m` | `10` | 变坡点里程归整步长，m；0 表示不归整 |
+| `station_rounding_m` | `10` | 内部变坡点里程归整步长，m；短坡二次合并和竖缓避让产生的新位置也使用该精度，0 表示不归整 |
 | `station_monotonicity_tolerance_m` | `1e-6` | 判断投影里程反向的容差，m |
 
 参数调整建议：

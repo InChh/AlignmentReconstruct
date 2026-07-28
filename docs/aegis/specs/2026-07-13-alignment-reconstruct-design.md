@@ -1,7 +1,7 @@
 # AlignmentReconstruct 完整设计规格
 
 日期：`2026-07-13`  
-状态：`已实现；2026-07-16 平面活跃路径完成毫米级对齐`
+状态：`已实现；2026-07-16 平面活跃路径完成毫米级对齐；2026-07-27 纵面重构按 CRebuildDlg → CReBuildGMX 真实运行链完成小数点后对齐`
 架构审查：`需要`
 
 ## 1. 目标
@@ -24,7 +24,9 @@
 - `CDrawSlope::CalTLDL` 按 `设计高程 - 实测高程` 计算抬落道量，正值为抬道、负值为落道，并在旧界面链路中换算为毫米：`DrawSlope.cpp:6339-6367`。
 - `BAS_CALC_FUN::MLToH_Bas` 明确“考虑了竖曲线”计算设计高程：`BAS_CALC_FUN.cpp:10269-10576`。
 - `PDTAB` 的 `Rshu` 是变坡点竖曲线半径：`Struct.h:1482-1524`。
-- 纵断面重构会拟合并写回 `Rshu`：`CH_V_Cal.cpp:3183-3461`、`CH_V_Cal.cpp:4444-4542`。
+- `reconstruct(XYZ)` 先用重构平面投影全部测点，投影 station 与原 z 配对形成纵面样本；这一数据流可由 `CH_V_Cal::TranLSXtoJYX_SW` 交叉核对。
+- 用户已用参考项目的“拟合坡度参数设置”实际运行同一批纵面样本，并提供该次运行生成的坡度表。对应的可达业务链是 `ZDMSJ::FitSlope` → `CRebuildDlg::OnBnClickedOk` → `CReBuildGMX::FitSlope`，因此这条链及本次真实输出是纵面算法权威。
+- 本次参考参数为固定阈值 `0.001`、最小坡长 `350 m`、最大坡差 `7‰`、上下行限坡 `25‰`、圆竖曲线、半径整百；参考坡度表共有 55 个控制点，覆盖 `0～49394.250344 m`。
 
 这些代码共同确定本项目的公共契约：纵断面重构必须输出竖曲线半径，第二项能力必须接收完整平纵方案并联合计算拨量和抬落道量。
 
@@ -79,16 +81,18 @@
 
 | 阶段 | 必读代码 | Agent 实现指引 |
 | --- | --- | --- |
-| 三维点转纵面样本 | `CH_V_Cal.cpp:2939-3055`：`OnInitZDMBasicData_SW`、`GetPDandDSC_SW` | 使用平面投影后的统一里程和测点 z 形成纵面样本；规范参数必须变为显式 options |
-| 阈值搜索 | `CH_V_Cal.cpp:3056-3197`：`GetOptThreshold_SW`、`MlToGMXH_SW` | 保留二阶差商阈值候选的评价方式；绘图和全局对象不进入新库 |
-| 纵面总流程 | `CH_V_Cal.cpp:3198-3465`：`FitSlope_SW` | 严格参考现有阶段顺序：二阶差商 → 属性分类 → 直坡段 → 变坡点 → 合并 → 竖曲线半径 → 规范限制 → 高程重算 |
-| 二阶差商与属性 | `CH_V_Cal.cpp:3686-3788`：`CountEstateFall_SW`、`JudgePtProperty_SW`、`CreatePtArry_SW` | 支持非等间距 station；端点处理和阈值比较必须有确定性测试 |
-| 直坡段形成和拟合 | `CH_V_Cal.cpp:3839-4005`：`FormLineAry_SW`、`FitSglLine_SW`、`_rtCalculateLine_SW` | 提取直线段样本范围、最小二乘斜率/截距和误差计算 |
-| 变坡点形成 | `CH_V_Cal.cpp:4006-4194`：`FormSlopeAry_SW`、`IsPIbetwnLines_SW` | 相邻坡段延长线交点生成 `station/elevation`；保持起终点固定规则 |
-| 坡段整饰 | `CH_V_Cal.cpp:4195-4444`：`UniteSmallGradeFall_SW`、`CalSglSlopeDegree_SW`、`UniteSmallSlope_SW`、`RoundBPDMl_SW` | 保留小坡度差和最小坡长合并、坡度/坡长重算及里程取整顺序 |
-| 竖曲线半径 | `CH_V_Cal.cpp:4445-4592`：`SetRShu_SW`、`FitRShu_SW`、`GetSEPt_SW`、`Func_SW` | 输出 `vertical_curve_radius_m`；保留坡度代数差触发、半径迭代、最小/最大半径限制和取整顺序 |
-| 竖缓重叠与坡度调整 | `CH_V_Cal.cpp:4593-5552`：`AdjustSlopeByHHQX_SW` 到 `CalLimitGrade_SW` | 仅抽取影响最终变坡点/半径的纯规则；桥隧站等外部规范数据不隐式读取，改为 options 或明确不支持诊断 |
-| 纵面输出准备 | `CH_V_Cal.cpp:5553-5575`：`CpyXLNameToSlope_SW` | 线路名复制不是核心；最终生产输出只取 station、elevation、radius 及必要派生坡度 |
+| 入口和总调用顺序 | `ZDMSJ.cpp:941-962`：`ZDMSJ::FitSlope`；`RebuildDlg.cpp:93-368`：`CRebuildDlg::OnBnClickedOk` | 对话框把当前轨面线的 `Cml/H` 样本和参数传给 `CReBuildGMX`，未使用纵面台账时调用 `FitSlope(..., false)`。新库以重构平面投影 station 配对原 z，替代旧 `Cml/H` 容器 |
+| 参数来源 | `RebuildDlg.cpp:590-662`：`OnInitDialog`；`:179-367`：阈值和半径归整 | 最小坡长、限坡、最大坡差、竖曲线触发坡差、规范半径、半径归整、里程归整和坡度位数必须由 options 显式承载；默认值与本次真实运行参数一致 |
+| 阈值范围和选优 | `RebuildDlg.cpp:167-331`：`m_IsFW` 分支 | 未勾选范围时只使用固定阈值；勾选时每个候选执行完整拟合，以厘米舍入后的逐点抬落道平方和选最小值，相同分数保留后一个候选 |
+| 活跃总流程 | `ReBuildGMX.cpp:841-1680`：`FitSlope` 当前未注释的“方法三、原始” | 顺序固定为：15 m 二阶差商 → 初始直线拟合 → 中误差吸收 → 变坡点 → 小坡差/短坡合并 → 变坡点 ±100 m 重分属性 → 直线复拟合 → 半径拟合与边界震荡 → 再合并 → 全部内部变坡点里程取整 → 近重合点合并 → 第二次短坡合并 → 竖缓避让 → 坡度取整和高程重建 → 规范限制 → 最终半径 |
+| 二阶差商与属性 | `ReBuildGMX.cpp:2797-2914`：`CountEstateFall`、`JudgePtProperty`、`CreatePtArry` | 对每个可计算点分别向前、向后寻找里程差严格大于 `15 m` 的第一个测点；非等间距二阶差商取绝对值并乘 `100`。首尾不可计算区置 0；结果严格小于阈值判直线 |
+| 直坡段形成和拟合 | `ReBuildGMX.cpp:116-328`、`:2390-2480`、`:2936-3450`：`FitSglLine`、`IsPIbetwnLines`、`FormLineAry`、`ChgPtPropByMeanErr`、`FormSlopeAry` | 保留单样本直线借用相邻点、两倍中误差吸收和相邻直线交点。交点除位于有效范围外，还必须距前一直线起点超过最小坡长；最后一个交点距末测点必须超过 `200 m` |
+| 小坡差和最小坡长 | `ReBuildGMX.cpp:2079-2380`：`UniteSmallGradeFall`、`UniteSmallSlope`、`CalSglSlopeDegree` | 坡差严格小于 `0.1‰` 时删除变坡点；短坡合并每次只考察三个最短候选，保留首尾坡段 `2‰` 保护规则和三槽插入顺序 |
+| 重分段和震荡迭代 | `ReBuildGMX.cpp:1163-1460`：`FitSlope` 活跃循环 | 初始曲线窗固定为变坡点前后各 `100 m`。边界使用 `VPI ± R*tan(|Δα|/2)*cos(|坡角|)`，起点不得早于前一竖曲线终点，终点不得晚于后一变坡点。每轮重新拟合直线、重建变坡点和半径；调整样本少于 300 时结束，最多执行 151 轮 |
+| 里程和坡度整饰 | `ReBuildGMX.cpp:1461-1545`、`:3604-3669`：`RoundBPDMl`、`EnsureGradeDecimal`、`DegreeToXY` | 第一轮合并完成后，把全部内部变坡点按设置归整；合并归整后重合点，再执行第二轮短坡合并。坡度按设置归整后从起点向后重建内部控制点高程 |
+| 竖曲线半径 | `ReBuildGMX.cpp:3451-3599`：`SetRShu`、`FitRShu`、`GetSEPt`、`Func` | 仅当坡差大于规范竖曲线条件时拟合；以规范半径为初值和下限，迭代收敛阈值 `0.1 m`、最多 100 次，按选定步长向下归整，硬限制最大半径为 `30000 m` |
+| 竖缓避让和规范限制 | `ReBuildGMX.cpp:1795-2078`：`AdjustSlopeByLimitGrade`、`AdjustSlopeByPDDSC`、`AdjustSlopeByHHQX` | 平面缓和曲线区间由新平面方案显式传入；上下限坡、最大坡差等由 options 传入。旧曲线/隧道折减还依赖额外业务输入，当前公共契约未提供时不得隐式读取或伪造 |
+| 支持性对照 | `CH_V_Cal.cpp` 的 `TranLSXtoJYX_SW` 和 `_SW` 纵面函数 | 可用于确认 XYZ 到投影 station/z 的数据流或公共公式，不能覆盖真实运行坡度表已经证明的 `CReBuildGMX` 行为 |
 
 ### 3.5 纵断面求高程和抬落道量
 
@@ -99,19 +103,19 @@
 | 联合调用 | `ZDMSJ.cpp:10949-10968` | 先 `CalRectification` 得 `Projml`，再用同一 `Projml` 计算纵面设计高程和 TLDL，这是第二公共功能的数据流权威 |
 | 单点抬落道 | `DrawSlope.cpp:6337-6367`：`CDrawSlope::CalTLDL` | `HFall = design_elevation - measured_elevation`，返回链路使用毫米；新库内部保留米并提供毫米换算 |
 | 正负号语义 | `DrawSlope.cpp:3306-3376`：`CountMaxFall` | `HFall >= 0` 为抬道，`HFall < 0` 为落道 |
-| 批量重构评价 | `CH_V_Cal.cpp:6151-6301`：两个 `CalTLDALL` | 用于确认纵面重构目标统计和厘米舍入历史行为；不要把 `fabs` 后的厘米整数当作新公共 API 的主结果 |
+| 批量重构评价 | `RebuildDlg.cpp:220-294`：阈值候选抬落道统计 | 用于确认候选阈值的厘米舍入和平方和选优历史行为；不要把厘米整数当作新公共 API 的主结果 |
 | 批量逐点输出 | `DrawSlope.cpp:6272-6335`：批量 `CalTLDL` | 用于对照 `Level`、`TLDL` 和统计量；新库的逐点权威值仍为未提前舍入的米制差值 |
 
 ### 3.6 参考优先级与禁止复制边界
 
 实现时按以下优先级处理冲突：
 
-1. **A级：活跃业务调用链**——平面以 `OnBnClickedButtonZdfd` 和 `OnBnClickedButtonNhht` 为入口；联合调整量以 `CalRectification`、`ZDMSJ` 联合调用、`MLToH_Bas`、单点 `CalTLDL` 为入口。这些代码决定公共行为。
+1. **A级：真实运行结果和活跃业务调用链**——平面以 `OnBnClickedButtonZdfd` 和 `OnBnClickedButtonNhht` 为入口；纵面重构以本次真实坡度表及 `ZDMSJ::FitSlope` → `CRebuildDlg::OnBnClickedOk` → `CReBuildGMX::FitSlope` 为权威；联合调整量以 `CalRectification`、`ZDMSJ` 联合调用、`MLToH_Bas`、单点 `CalTLDL` 为入口。这些证据决定公共行为。
 2. **B级：活跃算法帮助函数**——上述表格列出的重构、建线、投影、竖曲线函数。用于复现数值步骤。
 3. **C级：显示和统计代码**——Excel、CAD 绘制、厘米/毫米格式化、汇总表。只能解释展示单位，不能反向改变主数值契约。
 4. **注释掉的旧实现**不得作为首选权威；只有活跃函数缺失公式且有测试证据时，才可作为调查线索。
 
-严禁直接复制到生产库：`CCeDianNiHe`、`CH_V_Cal`、`RHA`、`CDrawSlope` 整类，`CString`/`CArray`/`AcGe` 类型，CAD 绘图/文档锁/进度条，MDB/Excel 访问，全局状态，以及十列裸线元数组作为新核心模型。
+严禁直接复制到生产库：`CCeDianNiHe`、`CReBuildGMX`、`CH_V_Cal`、`RHA`、`CDrawSlope` 整类，`CString`/`CArray`/`AcGe` 类型，CAD 绘图/文档锁/进度条，MDB/Excel 访问，全局状态，以及十列裸线元数组作为新核心模型。
 
 每完成一个算法切片，Agent 必须记录“参考函数 → 新所有者 → 对照夹具 → 容差”，避免只抽取函数名而丢失调用顺序和参数来源。
 

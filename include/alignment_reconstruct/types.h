@@ -99,14 +99,15 @@ struct ReconstructionOptions {
     double horizontal_optimization_tolerance = 1.0e-4;
     std::size_t horizontal_optimization_max_iterations = 10;
     std::vector<double> vertical_second_difference_threshold_candidates{
-        1.0e-7, 2.0e-7, 5.0e-7, 1.0e-6, 2.0e-6, 5.0e-6, 1.0e-5
+        0.001
     };
-    double minimum_grade_length_m = 400.0;
-    double maximum_up_grade = 0.0;
-    double maximum_down_grade = 0.0;
-    double maximum_grade_difference_per_mille = 0.0;
-    double minimum_vertical_curve_radius_m = 1000.0;
-    double maximum_vertical_curve_radius_m = 40000.0;
+    double minimum_grade_length_m = 350.0;
+    double maximum_up_grade = 25.0;
+    double maximum_down_grade = 25.0;
+    double maximum_grade_difference_per_mille = 7.0;
+    double minimum_vertical_curve_grade_difference_per_mille = 3.0;
+    double minimum_vertical_curve_radius_m = 10000.0;
+    double maximum_vertical_curve_radius_m = 30000.0;
     double vertical_curve_radius_rounding_m = 100.0;
     double grade_rounding_per_mille = 0.01;
     double station_rounding_m = 10.0;

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "使用全部1569个实测XYZ测点完成纵断面重构，并与MDB既有基线坡度表的变坡点里程、高程一致。",
+  "goal": "公开reconstruct接口必须保留全部输入点，成功输出纵断面控制点；按正确里程基准转换后逐点对齐MDB。",
+  "successEvidence": [
+    "VS2026 Debug和Release新鲜构建通过；全部1569点公开API成功；控制点数量与MDB一致；station/elevation逐点最大误差达到小数点后数值级；全部回归测试通过。"
+  ],
+  "stopCondition": "done=全部证据满足；blocked=权限或必需数据不可用；needs-verification=实现存在但现场逐点证据不足；scope-exceeded=需要改变公共契约或修改旧ObjectARX生产代码。",
+  "nonGoals": [
+    "不修改旧ObjectARX工程；不公开XLSX/MDB/CSV；不改变已验证平面算法。"
+  ],
+  "scope": "VerticalReconstructor、ProfileClassifier、公开reconstruct纵面编排、纵面测试与验证记录。",
+  "changeKinds": [
+    "migration"
+  ],
+  "riskHints": [
+    "旧算法依赖活跃调用顺序、规范参数、断链里程和噪声分类；私有现场数据不能进入公开仓库。"
+  ]
+}

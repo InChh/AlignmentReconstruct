@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-07-27-vertical-active-path-parity",
+  "taskIntentRef": "docs/aegis/work/2026-07-27-vertical-active-path-parity/task-intent-draft.json",
+  "baselineRefs": [
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md; docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md; CRebuildDlg到CReBuildGMX真实运行路径"
+  ],
+  "scopeStatus": "verified",
+  "compatStatus": "verified",
+  "retirementStatus": "single-owner-preserved",
+  "newRiskSignals": [
+    "旧算法依赖活跃调用顺序、规范参数、断链里程和噪声分类；私有现场数据不能进入公开仓库。"
+  ],
+  "decision": "continue"
+}

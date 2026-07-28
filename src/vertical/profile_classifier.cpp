@@ -1,10 +1,13 @@
 #include "vertical/profile_classifier.h"
 
 #include <cmath>
+#include <cstddef>
 #include <stdexcept>
 
 namespace alignment_reconstruct::detail {
 namespace {
+
+constexpr double classification_window_m = 15.0;
 
 std::vector<ProfileClassificationRun> form_runs(const std::vector<bool>& curved) {
     std::vector<ProfileClassificationRun> runs;
@@ -41,16 +44,67 @@ ProfileSampleAnalysis classify_profile_samples(
             throw std::invalid_argument("Vertical sample stations must be strictly increasing");
         }
     }
-    for (std::size_t index = 1; index + 1 < samples.size(); ++index) {
-        const double first_length = samples[index].station_m - samples[index - 1].station_m;
-        const double second_length = samples[index + 1].station_m - samples[index].station_m;
-        const double numerator =
-            first_length * samples[index + 1].elevation_m -
-            (first_length + second_length) * samples[index].elevation_m +
-            second_length * samples[index - 1].elevation_m;
-        const double denominator =
-            first_length * second_length * (first_length + second_length);
-        analysis.second_divided_difference[index] = numerator / denominator;
+    if (samples.size() == 2) {
+        analysis.runs = form_runs(analysis.curved);
+        return analysis;
+    }
+
+    std::size_t first_calculated = 1;
+    while (first_calculated + 1 < samples.size() &&
+           samples[first_calculated].station_m -
+                   samples.front().station_m <=
+               classification_window_m) {
+        ++first_calculated;
+    }
+    std::size_t last_calculated = samples.size() - 2;
+    while (last_calculated > 0 &&
+           samples.back().station_m -
+                   samples[last_calculated].station_m <=
+               classification_window_m) {
+        --last_calculated;
+    }
+
+    if (first_calculated <= last_calculated) {
+        for (std::size_t index = first_calculated;
+             index <= last_calculated; ++index) {
+            std::size_t previous = index;
+            while (previous > 0) {
+                --previous;
+                if (samples[index].station_m -
+                        samples[previous].station_m >
+                    classification_window_m) {
+                    break;
+                }
+            }
+
+            std::size_t next = index + 1;
+            while (next < samples.size() &&
+                   samples[next].station_m -
+                           samples[index].station_m <=
+                       classification_window_m) {
+                ++next;
+            }
+            if (next == samples.size()) {
+                break;
+            }
+
+            const double first_length =
+                samples[index].station_m -
+                samples[previous].station_m;
+            const double second_length =
+                samples[next].station_m -
+                samples[index].station_m;
+            const double numerator =
+                (second_length + first_length) *
+                    samples[index].elevation_m -
+                second_length * samples[previous].elevation_m -
+                first_length * samples[next].elevation_m;
+            const double denominator =
+                first_length * second_length *
+                (first_length + second_length);
+            analysis.second_divided_difference[index] =
+                std::abs(numerator * 100.0 / denominator);
+        }
     }
     for (std::size_t index = 0; index < samples.size(); ++index) {
         analysis.curved[index] =

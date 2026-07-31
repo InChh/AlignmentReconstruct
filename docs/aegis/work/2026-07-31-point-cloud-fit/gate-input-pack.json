@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "baselineRefs": [
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md",
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md",
+    "docs/aegis/adr/ADR-0002-point-cloud-fit-owner.md"
+  ],
+  "impactStatement": "docs/aegis/work/2026-07-31-point-cloud-fit/impact-statement-draft.json",
+  "compatPlan": "只支持沿 X 方向单值展开且空间分箱充分的铁路点云，不提供任意拓扑寻路",
+  "retirementPlan": "no duplicate production owner or fallback retained",
+  "evidenceBundle": [
+    "docs/aegis/work/2026-07-31-point-cloud-fit/evidence-bundle-draft-target-verification.json"
+  ]
+}

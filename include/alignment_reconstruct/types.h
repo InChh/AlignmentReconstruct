@@ -78,7 +78,9 @@ enum class DiagnosticCode {
     invalid_vertical_radius,
     overlapping_vertical_curves,
     degenerate_fit,
-    projection_failed
+    projection_failed,
+    invalid_sample_interval,
+    insufficient_spatial_support
 };
 
 inline constexpr std::size_t no_input_index = std::numeric_limits<std::size_t>::max();
@@ -119,6 +121,14 @@ struct ReconstructionResult {
     std::vector<HorizontalControlPoint> horizontal;
     std::vector<VerticalControlPoint> vertical;
     std::vector<double> projected_stations_m;
+    std::vector<Diagnostic> diagnostics;
+
+    bool ok() const noexcept;
+};
+
+struct PointCloudFitResult {
+    StatusCode status = StatusCode::success;
+    std::vector<Point3D> centerline_points;
     std::vector<Diagnostic> diagnostics;
 
     bool ok() const noexcept;

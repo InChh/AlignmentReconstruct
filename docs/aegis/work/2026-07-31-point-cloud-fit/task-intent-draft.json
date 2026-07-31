@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "把本会话 Python 点云中心线算法迁移为 AlignmentReconstruct C++17 静态库公共函数 fit_point_cloud",
+  "goal": "输入米制、行序无关的 XYZ 铁路点云和间隔，输出按 XY 水平弧长等间隔采样的三维中心线点",
+  "successEvidence": [
+    "Debug 和 Release x64 Rebuild、全量测试及三入口样例通过",
+    "真实 26012 点输入与 262 点 Python 参考逐坐标对照通过",
+    "输入反序结果不变，生产依赖和项目清单检查通过"
+  ],
+  "stopCondition": "完成目标目录同步并在目标目录复验，或发现需要改变 X 单值适用边界时停止",
+  "nonGoals": [
+    "文件解析、CAD 绘图、ARX/MFC 或第三方数值库",
+    "回头、自交、分岔或任意拓扑点云寻路",
+    "改变 reconstruct 与 calculate_adjustments 的现有契约"
+  ],
+  "scope": "公共 API、唯一点云 owner、测试、样例、工程清单和必要架构文档",
+  "changeKinds": [
+    "public-api",
+    "numerical-owner",
+    "tests",
+    "architecture-docs"
+  ],
+  "riskHints": [
+    "跨语言最小二乘数值漂移",
+    "输入行序和 X 展开轴边界",
+    "新增 owner 与现有重构 owner 重叠"
+  ]
+}

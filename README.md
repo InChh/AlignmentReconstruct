@@ -2,10 +2,11 @@
 
 `AlignmentReconstruct` 是面向普通 C++ 调用方的铁路线路数值静态库。它接收调用方已经准备好的内存数据，不读取 DWG、MDB、Excel，也不依赖 AutoCAD、ObjectARX 或 MFC。
 
-库提供两个公共入口：
+库提供三个公共入口：
 
 | 调用方需求 | 使用入口 |
 | --- | --- |
+| 从行序无关、沿 X 方向单值展开的 XYZ 点云拟合中心线并等间隔采样 | `fit_point_cloud(...)` |
 | 根据按线路方向排列的 XYZ 测点恢复平面和纵断面方案 | `reconstruct(...)` |
 | 根据完整平纵方案计算测点的里程、拨量、设计高程和抬落道量 | `calculate_adjustments(...)` |
 
@@ -96,6 +97,7 @@ Debug 配置应改用 `build/Debug/AlignmentReconstruct.lib`。如果调用方�
 ```cpp
 #include <alignment_reconstruct/reconstruction.h>
 #include <alignment_reconstruct/adjustment.h>
+#include <alignment_reconstruct/point_cloud_fit.h>
 ```
 
 ## 5. 五分钟可运行示例
@@ -464,9 +466,63 @@ const AdjustmentCalculationResult changed =
 3. 同时比较控制点数量、交点坐标、半径、缓长、变坡点、拨量和抬落道量。
 4. 不要只以“接口成功返回”作为参数合理的依据。
 
-## 10. 错误处理
+## 10. API 三：从无序点云拟合并采样中心线
 
-两个公共函数都通过结果对象返回状态：
+### 10.1 函数签名
+
+```cpp
+#include <alignment_reconstruct/point_cloud_fit.h>
+
+alignment_reconstruct::PointCloudFitResult fit_point_cloud(
+    const std::vector<alignment_reconstruct::Point3D>& unordered_points,
+    double interval_m);
+```
+
+输入点、采样间隔和输出点的单位全部为米。函数不使用输入行序；输出方向固定为
+X 坐标较小端到较大端。采样里程只累计拟合中心线的 XY 水平弧长，Z 不参与间隔
+计算。结果包含起点、每个标准间隔点和实际终点；当终点距最后一个标准点不超过
+`0.01 m` 时，以实际终点替换该标准点。
+
+### 10.2 输入适用范围
+
+- 点云至少需要覆盖 20 个宽度为 `1 m` 的 X 空间分箱，每个已占用分箱至少 3 个点。
+- 线路必须能沿 X 方向单值展开；本函数不处理回头、自交、分岔或任意方向点云寻路。
+- `interval_m` 必须为有限正数。间隔大于线路总长时仍返回起点和终点。
+- 函数内部使用每箱 XYZ 中位数、三轮鲁棒局部二次拟合；平面 Y 半窗为 `12 m`，
+  高程 Z 半窗为 `6 m`。
+- 本函数只输出中心线采样点，不生成平纵控制点。需要参数化线路方案时，再把结果
+  作为沿线路方向排序的测点传给 `reconstruct(...)`。
+
+### 10.3 调用示例
+
+```cpp
+#include <alignment_reconstruct/point_cloud_fit.h>
+
+#include <iostream>
+#include <vector>
+
+int main() {
+    using namespace alignment_reconstruct;
+
+    std::vector<Point3D> point_cloud;
+    // 调用方读取文件、转换为米后，把全部 XYZ 点填入 point_cloud。
+    const PointCloudFitResult result =
+        fit_point_cloud(point_cloud, 10.0);
+    if (!result.ok()) {
+        return 1;
+    }
+
+    for (const Point3D& point : result.centerline_points) {
+        std::cout << point.x << ',' << point.y << ',' << point.z << '\n';
+    }
+}
+```
+
+文件解析和毫米转米由调用方负责；库只接收内存中的米制 `Point3D`。
+
+## 11. 错误处理
+
+三个公共函数都通过结果对象返回状态：
 
 | `StatusCode` | 含义 |
 | --- | --- |
@@ -510,10 +566,12 @@ bool report_errors(const Result& result) {
 | `overlapping_vertical_curves` | 竖曲线超出相邻坡段或互相重叠 |
 | `degenerate_fit` | 测点不足以形成稳定拟合，或拟合几何退化 |
 | `projection_failed` | 测点无法稳定投影到平面线路 |
+| `invalid_sample_interval` | 点云采样间隔不是有限正数，或会产生过多输出点 |
+| `insufficient_spatial_support` | 点云有效 X 分箱不足，或某个已占用分箱少于 3 个点 |
 
 当错误不对应某一个输入点时，`Diagnostic::input_index` 为 `no_input_index`。
 
-## 11. 常见接入问题
+## 12. 常见接入问题
 
 | 现象 | 优先检查 |
 | --- | --- |
@@ -524,11 +582,12 @@ bool report_errors(const Result& result) {
 | 拨量正负与下游指令相反 | 区分“测点相对方案线的位置偏差”和“从测点移动到方案线的动作方向” |
 | `vertical_range_mismatch` | 纵面起终 station 是否覆盖平面全长；修改交点后是否同步处理纵面 |
 | `non_monotonic_station` | 重构测点是否按线路方向排列，是否有回头点或重复 XY |
+| `insufficient_spatial_support` | 点云是否使用米单位，是否覆盖至少 20 个 1 m X 分箱，且每箱至少 3 点 |
 | 曲线全部被判成直线 | 检查采样密度、坐标单位、`curvature_window_m` 和曲率阈值 |
 | 纵面控制点过少或位置被归整 | 检查二阶差商阈值、`minimum_grade_length_m`、`station_rounding_m` 和坡度归整参数 |
 | 输入只有 N/E | 可以验证平面，但没有真实 z 就不能得到有意义的纵断面或抬落道量 |
 
-## 12. 运行测试和示例
+## 13. 运行测试和示例
 
 构建整个解决方案后运行：
 
@@ -544,11 +603,12 @@ bool report_errors(const Result& result) {
 - 圆竖曲线、变坡点、设计高程和抬落道量。
 - 平纵重构闭环。
 - 重构后修改交点，再使用 `calculate_adjustments` 计算原测点拨量。
+- 点云行序不变性、鲁棒中心线拟合、XY 弧长等间隔采样和稳定失败诊断。
 - Debug/Release x64 构建。
 
-完整可运行的双 API 示例位于 `samples/main.cpp`。
+三个公共入口的完整串联示例位于 `samples/main.cpp`。
 
-## 13. 常用文件位置与功能边界
+## 14. 常用文件位置与功能边界
 
 ```text
 include/alignment_reconstruct/   公共头文件
@@ -562,6 +622,6 @@ build/Release/                   Release 静态库、测试程序和示例程序
 - CAD 绘图、DWG 实体和 AutoCAD 命令。
 - ARX/MFC 类型或运行时。
 - Excel/MDB 文件读取。
-- 无序测点自动寻路。
+- 回头、自交、分岔或非 X 单值点云的通用自动寻路。
 - 三维最短空间距离或综合移动量。
 - 与 VS2012/v110 生成程序的二进制 ABI 兼容。

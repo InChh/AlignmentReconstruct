@@ -1,6 +1,7 @@
 #include "test_framework.h"
 
 #include "alignment_reconstruct/adjustment.h"
+#include "alignment_reconstruct/point_cloud_fit.h"
 #include "alignment_reconstruct/reconstruction.h"
 
 #include <type_traits>
@@ -36,13 +37,17 @@ AR_TEST(vertical_control_point_carries_station_elevation_and_radius) {
 
 AR_TEST(result_status_is_the_only_success_owner) {
     ReconstructionResult reconstruction;
+    PointCloudFitResult point_cloud_fit;
     AdjustmentCalculationResult adjustments;
     AR_EXPECT(reconstruction.ok());
+    AR_EXPECT(point_cloud_fit.ok());
     AR_EXPECT(adjustments.ok());
 
     reconstruction.status = StatusCode::invalid_input;
+    point_cloud_fit.status = StatusCode::numerical_failure;
     adjustments.status = StatusCode::infeasible_geometry;
     AR_EXPECT(!reconstruction.ok());
+    AR_EXPECT(!point_cloud_fit.ok());
     AR_EXPECT(!adjustments.ok());
 }
 

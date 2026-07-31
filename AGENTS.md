@@ -4,12 +4,14 @@
 
 本文件约束 `AlignmentReconstruct` 根目录及其全部子目录中的开发工作。项目是独立的 Visual Studio 2026、C++17、x64 静态库，生产代码只能依赖 C++17 标准库。不得引入 AutoCAD、ObjectARX、MFC、MDB、Excel、COM 或旧工程运行时依赖。
 
-库的公共能力只有两项：
+库的公共能力有三项：
 
-1. `reconstruct`：从沿线路前进方向排序的 XYZ 测点重构平面和纵断面。
-2. `calculate_adjustments`：用完整平纵方案逐点计算投影里程、拨量、设计高程和抬落道量。
+1. `fit_point_cloud`：从行序无关、沿 X 方向单值展开的 XYZ 点云拟合中心线，并按
+   XY 水平弧长等间隔输出三维点。
+2. `reconstruct`：从沿线路前进方向排序的 XYZ 测点重构平面和纵断面。
+3. `calculate_adjustments`：用完整平纵方案逐点计算投影里程、拨量、设计高程和抬落道量。
 
-CAD 绘图、文件解析、数据库访问、无序点寻路和旧插件集成都不属于本库。
+CAD 绘图、文件解析、数据库访问、任意拓扑点云寻路和旧插件集成都不属于本库。
 
 ## 2. 开始修改前的必读顺序
 
@@ -21,8 +23,9 @@ CAD 绘图、文件解析、数据库访问、无序点寻路和旧插件集成�
 2. `docs/aegis/baseline/2026-07-13-revised-baseline.md`：当前产品与架构基线。
 3. `docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md`：完整设计；涉及算法迁移或兼容性时必须阅读第 3 节“High-value legacy seams”。
 4. `docs/aegis/adr/ADR-0001-pure-cpp-alignment-owners.md`：唯一所有者和依赖方向。
-5. `include/alignment_reconstruct/` 与本次变更对应的 `src/` owner。
-6. `docs/verification/2026-07-13-build-and-parity.md`：已有证据、容差和未覆盖边界。
+5. `docs/aegis/adr/ADR-0002-point-cloud-fit-owner.md`：点云拟合 owner、输入几何和采样边界。
+6. `include/alignment_reconstruct/` 与本次变更对应的 `src/` owner。
+7. `docs/verification/2026-07-13-build-and-parity.md`：已有证据、容差和未覆盖边界。
 
 不要把历史验证记录当作当前构建结果；完成前必须重新执行与变更风险相称的验证。
 
@@ -36,7 +39,9 @@ CAD 绘图、文件解析、数据库访问、无序点寻路和旧插件集成�
 - 里程：拨量和设计高程必须共享 `HorizontalAlignment` 产生的同一个投影 `station_m`。
 - `VerticalControlPoint::station_m` 与平面线路使用同一数值里程基准，不是点序号，也不是独立纵面累计长。
 - 平面必须真实支持直线、进口 Euler 缓和曲线、圆曲线和出口 Euler 缓和曲线；纵面控制点的半径是物理竖曲线半径。
-- 输入或几何失败必须返回稳定诊断；不得静默排序、丢点、回退为折线或用硬编码结果掩盖失败。
+- `reconstruct` 不得静默排序或丢弃输入点；`fit_point_cloud` 按契约不使用输入行序，
+  但只支持沿 X 方向单值展开且空间分箱充分的点云。
+- 输入或几何失败必须返回稳定诊断；不得静默丢点、回退为折线或用硬编码结果掩盖失败。
 
 任何公共字段、单位、符号、输入范围、诊断或默认参数变更，都属于契约变更：先核对基线和设计，补充测试，并同步 `README.md`。
 
@@ -48,6 +53,8 @@ CAD 绘图、文件解析、数据库访问、无序点寻路和旧插件集成�
 - `HorizontalAlignment`：唯一平面建线、按里程求点和最近投影 owner，也是 station 的唯一权威来源。
 - `VerticalAlignment`：唯一纵面校验和按里程求设计高程 owner。
 - `AlignmentAdjustmentCalculator`：只编排平面投影与纵面求值，不得复制投影、符号、缓和曲线或竖曲线公式。
+- `PointCloudFitter`：唯一点云空间分箱、鲁棒局部拟合和 XY 弧长等间隔采样 owner；
+  不得复制参数化线路建线、投影或纵面求值公式。
 - `tests/legacy_reference/`：仅用于测试数值对照，绝不能出现在生产项目或 `AlignmentReconstruct.lib` 中。
 
 依赖应从公共自由函数流向内部编排 owner，再流向 alignment 和 typed 几何线元。不要新增第二套投影、高程求值或重构实现，也不要建立通用算法“大杂烩”文件。
@@ -105,6 +112,7 @@ CAD 绘图、文件解析、数据库访问、无序点寻路和旧插件集成�
 - 左右拨量符号、线路端点外投影和同里程不变量；
 - 凸/凹竖曲线、零半径折坡、纵面覆盖范围和抬落道符号；
 - 平纵重构闭环，以及修改重构交点后再次调用 `calculate_adjustments`；
+- 点云输入行序不变性、空间支持度、XY 弧长采样端点和 Python 迁移数值对照；
 - 非法输入的稳定 `StatusCode`、`DiagnosticCode` 和 `input_index`。
 
 `tests/fixtures/*.csv` 是私有现场证据，已由 `.gitignore` 排除，严禁提交、推送或放入公开发布包。公开仓库只保留 `tests/fixtures/README.md`；没有私有夹具时相关测试必须明确跳过，不能伪装为通过。普通测试不得依赖 ACE、Office、外部数据库或本机路径。只有在有明确权威来源和审查理由时才更新本地夹具；现场兼容性结论必须逐字段比较并报告最大误差、RMS（适用时）和容差，不能以“构建成功”代替。

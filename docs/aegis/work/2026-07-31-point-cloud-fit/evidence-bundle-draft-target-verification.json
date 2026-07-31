@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "target-verification",
+  "type": "build-test-parity",
+  "source": "Debug/Release Rebuild, 48-test suites, samples, real 26012-point Python parity, dependency and symbol scans",
+  "summary": "All commands exited 0; 262 C++ coordinates match Python within 1e-7 m and reversed input is identical",
+  "verifier": "Codex direct command evidence on 2026-07-31"
+}

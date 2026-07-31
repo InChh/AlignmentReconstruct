@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [
+    "public-contract",
+    "point-cloud-numerical-owner",
+    "build-and-tests",
+    "architecture-baseline"
+  ],
+  "owners": [
+    "include/alignment_reconstruct/point_cloud_fit.h",
+    "detail::PointCloudFitter"
+  ],
+  "invariants": [
+    "所有公共输入和输出单位为米",
+    "输入行序不参与 fit_point_cloud 结果",
+    "采样间隔按 XY 水平弧长定义，Z 不参与",
+    "reconstruct 的有序输入契约保持不变"
+  ],
+  "compatBoundary": "只支持沿 X 方向单值展开且空间分箱充分的铁路点云，不提供任意拓扑寻路",
+  "nonGoals": [
+    "文件格式解析",
+    "CAD 或旧插件集成",
+    "通用点云寻路",
+    "第二套生产 fallback"
+  ]
+}

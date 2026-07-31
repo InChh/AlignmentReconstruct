@@ -6,6 +6,10 @@ bool ReconstructionResult::ok() const noexcept {
     return status == StatusCode::success;
 }
 
+bool PointCloudFitResult::ok() const noexcept {
+    return status == StatusCode::success;
+}
+
 double PointAdjustment::horizontal_offset_mm() const noexcept {
     return horizontal_offset_m * 1000.0;
 }

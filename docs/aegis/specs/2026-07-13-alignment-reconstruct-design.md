@@ -1,15 +1,17 @@
 # AlignmentReconstruct 完整设计规格
 
 日期：`2026-07-13`  
-状态：`已实现；2026-07-16 平面活跃路径完成毫米级对齐；2026-07-27 纵面重构按 CRebuildDlg → CReBuildGMX 真实运行链完成小数点后对齐`
+状态：`已实现；2026-07-16 平面活跃路径完成毫米级对齐；2026-07-27 纵面重构按 CRebuildDlg → CReBuildGMX 真实运行链完成小数点后对齐；2026-07-31 增加点云中心线拟合采样入口`
 架构审查：`需要`
 
 ## 1. 目标
 
-在 `D:\Programming\C++\Projects\既有线\AlignmentReconstruct` 建立独立的 Visual Studio 2026、C++17、x64 静态库项目，从既有 ObjectARX 工程中抽取纯数值算法，对外提供两项能力：
+在 `D:\Programming\C++\Projects\既有线\AlignmentReconstruct` 建立独立的 Visual Studio 2026、C++17、x64 静态库项目，从既有 ObjectARX 工程中抽取纯数值算法，对外提供三项能力：
 
-1. 输入按线路前进方向排序的 XYZ 测点，重构平面线形和纵断面线形。
-2. 输入 XYZ 测点以及完整线路方案（平面方案和纵断面方案），逐点计算拨量与抬落道量。
+1. 输入行序无关、沿 X 方向单值展开的 XYZ 点云，拟合中心线并按 XY 水平弧长
+   等间隔输出三维点。
+2. 输入按线路前进方向排序的 XYZ 测点，重构平面线形和纵断面线形。
+3. 输入 XYZ 测点以及完整线路方案（平面方案和纵断面方案），逐点计算拨量与抬落道量。
 
 新项目不得依赖 ObjectARX、AutoCAD、MFC、MDB、Excel 或旧工程的运行时状态。
 
@@ -145,9 +147,11 @@ AlignmentReconstruct/
   README.md
   include/alignment_reconstruct/
     types.h
+    point_cloud_fit.h
     reconstruction.h
     adjustment.h
   src/
+    point_cloud/
     geometry/
     horizontal/
     vertical/
@@ -173,7 +177,9 @@ AlignmentReconstruct/
 
 - 坐标、里程、半径、缓和曲线长、高程、拨量和抬落道量的主单位均为米。
 - 公共结果可提供毫米便捷换算，但不把毫米作为内部权威单位。
-- 输入重构测点按线路起点到终点排序；库不自动重排。
+- `reconstruct` 的输入测点按线路起点到终点排序；该入口不自动重排。
+- `fit_point_cloud` 不使用输入行序，输出从最小 X 端到最大 X 端；该入口只支持沿 X
+  方向单值展开且空间分箱充分的点云。
 - 沿里程增加方向观察：右侧拨量为正，左侧拨量为负。
 - `抬落道量 = 设计高程 - 测点 z`；正值表示抬道，负值表示落道。
 - `station` 表示沿平面线路从 `start_station_m` 开始累计的统一里程，不是测点序号，也不是测点间原始折线距离。
@@ -300,6 +306,19 @@ AdjustmentCalculationResult calculate_adjustments(
 
 该函数同时输出拨量和抬落道量；第一版不再提供一个会重复建线、重复投影的独立生产级抬落道计算器。若后续确需按已知里程查询纵面高程，可在 `VerticalAlignment` 内部测试接口稳定后另行设计，不在本目标中预先扩张公共 API。
 
+### 7.3 点云中心线拟合与采样
+
+```cpp
+PointCloudFitResult fit_point_cloud(
+    const std::vector<Point3D>& unordered_points,
+    double interval_m);
+```
+
+输入点、间隔和输出点均使用米。算法按一米 X 空间分箱取 XYZ 中位数，分别以
+`12 m` 和 `6 m` 半窗对 Y、Z 做三轮鲁棒局部二次拟合，再按拟合折线的 XY 水平
+弧长采样。Z 不参与里程；结果保留实际起终点。该入口输出中心线点，不构造平纵方案，
+也不改变 `reconstruct` 的有序输入契约。
+
 ## 8. 算法与所有权边界
 
 ### 8.1 `HorizontalReconstructor`
@@ -338,6 +357,11 @@ AdjustmentCalculationResult calculate_adjustments(
 
 只负责编排 `HorizontalAlignment` 与 `VerticalAlignment`：它不复制投影、缓和曲线、竖曲线或符号计算公式。
 
+### 8.6 `PointCloudFitter`
+
+唯一负责点云一米 X 空间分箱、中位数锚点、Y/Z 鲁棒局部二次拟合和 XY 水平弧长
+等间隔采样。它不构造 typed 平纵线元、不投影测点，也不求设计高程。
+
 ## 9. 重构数据流
 
 ### 9.1 平面
@@ -361,6 +385,15 @@ AdjustmentCalculationResult calculate_adjustments(
 5. 按旧流程合并小坡度差和短坡段，重算坡度、高程和坡长。
 6. 对需要竖曲线的中间变坡点拟合、限制并取整半径。
 7. 输出包含 `station_m`、`elevation_m` 和 `vertical_curve_radius_m` 的控制点。
+
+### 9.3 点云中心线
+
+1. 校验点数、有限坐标和有限正采样间隔。
+2. 以坐标中位数平移到局部坐标，按 X 位置而非输入行序建立一米空间分箱。
+3. 校验至少 20 个有效分箱且每箱至少 3 点，取每箱 XYZ 中位数锚点。
+4. 对 Y 和 Z 分别执行三轮 Tukey 双权鲁棒局部二次拟合，并拟合实际 X 端点。
+5. 按 XY 水平弧长累计并插值输出给定间隔点；保留实际终点。
+6. 加回局部原点并返回米制 XYZ。
 
 ## 10. 线路评估细节
 
@@ -387,6 +420,8 @@ AdjustmentCalculationResult calculate_adjustments(
 - 竖曲线半径为负，或者落入第一版不支持的旧特殊编码区间；
 - 相邻竖曲线重叠；
 - 坡段或拟合退化。
+- 点云采样间隔不是有限正数或会产生过多输出点；
+- 点云有效 X 分箱少于 20 个，或某个已占用分箱少于 3 点。
 
 公共结果包含总体状态和诊断列表。诊断至少包含严重程度、稳定代码、相关输入索引（适用时）和可读信息。库不得静默删除输入点。
 
@@ -405,6 +440,7 @@ AdjustmentCalculationResult calculate_adjustments(
 - 线路端点外投影；
 - 米与毫米换算；
 - 第 11 节各类校验错误。
+- 点云输入行序不变性、中心线拟合、XY 弧长采样、端点策略和 Python 数值参考。
 
 ### 12.2 重构闭环测试
 
@@ -447,7 +483,7 @@ AdjustmentCalculationResult calculate_adjustments(
 
 - 旧 ObjectARX 工程只作为行为证据，本目标不修改、删除或重定向旧代码。
 - 新库不追求旧二进制 ABI、自定义实体、DWG、MDB 或界面兼容。
-- 不处理无序点自动寻路。
+- 不处理回头、自交、分岔或非 X 单值点云的通用自动寻路。
 - 不绘制 CAD 实体，不注册命令，不读写数据库或 Excel。
 - 不在本目标中集成回旧插件。
 - 不输出综合三维移动距离；拨量和抬落道量保持为两个有方向的物理量。
@@ -456,6 +492,7 @@ AdjustmentCalculationResult calculate_adjustments(
 
 - 不变量：每个测点只有一个平面投影里程，平面拨量与纵面设计高程必须共享该里程。
 - 权威所有者：平面投影属于 `HorizontalAlignment`，纵面高程属于 `VerticalAlignment`，联合编排属于 `AlignmentAdjustmentCalculator`。
+- 点云压缩权威属于 `PointCloudFitter`，与参数化线路重构、投影和高程求值分离。
 - 无重复责任：联合计算器不复制几何公式；纵断面重构输出能够完整回灌到线路定义。
 - 结论：采用联合评估接口；竖曲线半径是公共纵面控制点的必要字段；第二功能必须同时输出拨量和抬落道量。
 
@@ -464,7 +501,7 @@ AdjustmentCalculationResult calculate_adjustments(
 只有同时满足下列条件才可声明完成：
 
 1. `AlignmentReconstruct.sln`、静态库和测试工程位于指定目录。
-2. 两个公共操作均完成真实实现。
+2. 三个公共操作均完成真实实现。
 3. 重构输出完整包含平面参数和纵面里程、高程、竖曲线半径。
 4. 联合计算逐点输出投影里程、投影坐标、设计高程、拨量和抬落道量。
 5. 确定性、闭环和旧行为对照测试通过。
@@ -487,11 +524,12 @@ AdjustmentCalculationResult calculate_adjustments(
 7. 实现纵断面重构主链，逐阶段对照二阶差商、坡段、变坡点、半径和整饰结果。
 8. 加入闭环、旧行为对照、错误诊断和样例。
 9. 完成 Debug/Release x64 新鲜构建、测试、依赖扫描和架构审查。
+10. 增加 `PointCloudFitter`，完成合成、行序不变性和真实 Python 参考逐点对照。
 
 必须交付：
 
 - 可被其他 C++17 工程链接的 `.lib` 和公共头文件；
-- 演示两个公共能力的控制台 sample；
+- 演示三个公共能力串联调用的控制台 sample；
 - 确定性夹具和测试可执行程序；
 - `tests/legacy_reference` 最小参考实现及来源映射；
 - 每项对照的容差说明；

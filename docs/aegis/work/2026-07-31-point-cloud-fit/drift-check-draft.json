@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-07-31-point-cloud-fit",
+  "taskIntentRef": "docs/aegis/work/2026-07-31-point-cloud-fit/task-intent-draft.json",
+  "baselineRefs": [
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md",
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md",
+    "docs/aegis/adr/ADR-0002-point-cloud-fit-owner.md"
+  ],
+  "scopeStatus": "aligned",
+  "compatStatus": "aligned",
+  "retirementStatus": "no duplicate production owner or fallback retained",
+  "newRiskSignals": [
+    "未来非 X 单值数据需要新的方向和拓扑契约"
+  ],
+  "decision": "continue"
+}

@@ -41,3 +41,15 @@
 | 2026-07-27 | work | docs/aegis/work/2026-07-27-vertical-active-path-parity/30-runtime-reference-correction.md | 纵断面真实运行权威路径修正 |
 | 2026-07-27 | artifact | docs/aegis/work/2026-07-27-vertical-active-path-parity/gate-input-pack.json | 纵断面活跃路径迁移 gate input pack |
 | 2026-07-27 | work | docs/aegis/work/2026-07-27-vertical-active-path-parity/proof-bundle.md | 纵断面活跃路径迁移 proof bundle |
+| 2026-07-31 | plan | docs/aegis/plans/2026-07-31-point-cloud-fit-implementation.md | 点云中心线拟合与等间隔采样实施计划 |
+| 2026-07-31 | work | docs/aegis/work/2026-07-31-point-cloud-fit/10-intent.md | 点云中心线拟合与等间隔采样 intent |
+| 2026-07-31 | work | docs/aegis/work/2026-07-31-point-cloud-fit/20-checkpoint.md | 点云中心线拟合与等间隔采样 checkpoint |
+| 2026-07-31 | adr | docs/aegis/adr/ADR-0002-point-cloud-fit-owner.md | ADR-0002 - 点云中心线拟合与等间隔采样所有者 |
+| 2026-07-31 | work | docs/aegis/work/2026-07-31-point-cloud-fit/90-evidence.md | 点云中心线拟合与等间隔采样 evidence |
+| 2026-07-31 | work | docs/aegis/work/2026-07-31-point-cloud-fit/99-reflection.md | 点云中心线拟合与等间隔采样 reflection |
+| 2026-07-31 | artifact | docs/aegis/work/2026-07-31-point-cloud-fit/task-intent-draft.json | 点云中心线拟合 task intent draft |
+| 2026-07-31 | artifact | docs/aegis/work/2026-07-31-point-cloud-fit/impact-statement-draft.json | 点云中心线拟合 impact statement draft |
+| 2026-07-31 | artifact | docs/aegis/work/2026-07-31-point-cloud-fit/drift-check-draft.json | 点云中心线拟合 drift check draft |
+| 2026-07-31 | artifact | docs/aegis/work/2026-07-31-point-cloud-fit/evidence-bundle-draft-target-verification.json | 2026-07-31-point-cloud-fit evidence target-verification |
+| 2026-07-31 | artifact | docs/aegis/work/2026-07-31-point-cloud-fit/gate-input-pack.json | 2026-07-31-point-cloud-fit gate input pack |
+| 2026-07-31 | work | docs/aegis/work/2026-07-31-point-cloud-fit/proof-bundle.md | 2026-07-31-point-cloud-fit proof bundle |

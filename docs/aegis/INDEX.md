@@ -53,3 +53,20 @@
 | 2026-07-31 | artifact | docs/aegis/work/2026-07-31-point-cloud-fit/evidence-bundle-draft-target-verification.json | 2026-07-31-point-cloud-fit evidence target-verification |
 | 2026-07-31 | artifact | docs/aegis/work/2026-07-31-point-cloud-fit/gate-input-pack.json | 2026-07-31-point-cloud-fit gate input pack |
 | 2026-07-31 | work | docs/aegis/work/2026-07-31-point-cloud-fit/proof-bundle.md | 2026-07-31-point-cloud-fit proof bundle |
+| 2026-08-01 | spec | docs/aegis/specs/2026-08-01-dynamic-library-design.md | AlignmentReconstruct 动态库设计规格 |
+| 2026-08-01 | plan | docs/aegis/plans/2026-08-01-dynamic-library-implementation.md | AlignmentReconstruct 动态库改造实施计划 |
+| 2026-08-01 | work | docs/aegis/work/2026-08-01-dynamic-library/10-intent.md | AlignmentReconstruct 动态库改造 intent |
+| 2026-08-01 | work | docs/aegis/work/2026-08-01-dynamic-library/20-checkpoint.md | AlignmentReconstruct 动态库改造 checkpoint |
+| 2026-08-01 | adr | docs/aegis/adr/ADR-0003-dynamic-library-export-boundary.md | ADR-0003 - 三入口动态库导出边界 |
+| 2026-08-01 | work | docs/aegis/work/2026-08-01-dynamic-library/90-evidence.md | AlignmentReconstruct 动态库改造 evidence |
+| 2026-08-01 | work | docs/aegis/work/2026-08-01-dynamic-library/99-reflection.md | AlignmentReconstruct 动态库改造 reflection |
+| 2026-08-01 | artifact | docs/aegis/work/2026-08-01-dynamic-library/task-intent-draft.json | AlignmentReconstruct 动态库改造 task intent draft |
+| 2026-08-01 | artifact | docs/aegis/work/2026-08-01-dynamic-library/baseline-read-set-hint.json | AlignmentReconstruct 动态库改造 baseline read-set hint |
+| 2026-08-01 | artifact | docs/aegis/work/2026-08-01-dynamic-library/baseline-usage-draft.json | AlignmentReconstruct 动态库改造 baseline usage draft |
+| 2026-08-01 | artifact | docs/aegis/work/2026-08-01-dynamic-library/impact-statement-draft.json | AlignmentReconstruct 动态库改造 impact statement draft |
+| 2026-08-01 | artifact | docs/aegis/work/2026-08-01-dynamic-library/todo-checkpoint-draft.json | AlignmentReconstruct 动态库改造 todo checkpoint draft |
+| 2026-08-01 | artifact | docs/aegis/work/2026-08-01-dynamic-library/drift-check-draft.json | AlignmentReconstruct 动态库改造 drift check draft |
+| 2026-08-01 | artifact | docs/aegis/work/2026-08-01-dynamic-library/resume-state-hint.json | 2026-08-01-dynamic-library resume state hint |
+| 2026-08-01 | artifact | docs/aegis/work/2026-08-01-dynamic-library/evidence-bundle-draft-target-verification.json | 2026-08-01-dynamic-library evidence target-verification |
+| 2026-08-01 | artifact | docs/aegis/work/2026-08-01-dynamic-library/gate-input-pack.json | 2026-08-01-dynamic-library gate input pack |
+| 2026-08-01 | work | docs/aegis/work/2026-08-01-dynamic-library/proof-bundle.md | 2026-08-01-dynamic-library proof bundle |

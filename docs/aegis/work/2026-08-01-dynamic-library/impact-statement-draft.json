@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [
+    "public C++ API",
+    "MSBuild output",
+    "test link topology"
+  ],
+  "owners": [
+    "include/alignment_reconstruct/api.h",
+    "AlignmentReconstruct.vcxproj"
+  ],
+  "invariants": [
+    "units remain metres",
+    "algorithms and diagnostics remain unchanged"
+  ],
+  "compatBoundary": "Existing C++ signatures remain; callers use x64, matching MSVC ABI, and /MDd or /MD.",
+  "nonGoals": [
+    "C ABI",
+    "algorithm changes",
+    "static-library fallback"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "baselineRefs": [
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md",
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md"
+  ],
+  "impactStatement": "docs/aegis/work/2026-08-01-dynamic-library/impact-statement-draft.json",
+  "compatPlan": "Existing C++ signatures remain; callers use x64, matching MSVC ABI, and /MDd or /MD.",
+  "retirementPlan": "static-library configuration and src/types.cpp retired without fallback",
+  "evidenceBundle": [
+    "docs/aegis/work/2026-08-01-dynamic-library/evidence-bundle-draft-target-verification.json"
+  ]
+}

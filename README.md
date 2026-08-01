@@ -1,6 +1,6 @@
 # AlignmentReconstruct
 
-`AlignmentReconstruct` 是面向普通 C++ 调用方的铁路线路数值静态库。它接收调用方已经准备好的内存数据，不读取 DWG、MDB、Excel，也不依赖 AutoCAD、ObjectARX 或 MFC。
+`AlignmentReconstruct` 是面向普通 C++ 调用方的铁路线路数值动态库。它接收调用方已经准备好的内存数据，不读取 DWG、MDB、Excel，也不依赖 AutoCAD、ObjectARX 或 MFC。
 
 库提供三个公共入口：
 
@@ -10,7 +10,9 @@
 | 根据按线路方向排列的 XYZ 测点恢复平面和纵断面方案 | `reconstruct(...)` |
 | 根据完整平纵方案计算测点的里程、拨量、设计高程和抬落道量 | `calculate_adjustments(...)` |
 
-公共头文件位于 `include/alignment_reconstruct/`，静态库文件名为 `AlignmentReconstruct.lib`。
+公共头文件位于 `include/alignment_reconstruct/`；运行时文件为
+`AlignmentReconstruct.dll`，链接时使用同目录生成的导入库
+`AlignmentReconstruct.lib`。
 
 ## 1. 获取代码
 
@@ -31,12 +33,14 @@ cd AlignmentReconstruct
 - 生产依赖：仅 C++17 标准库。
 - 坐标约定：`x = N（北坐标/纬距）`，`y = E（东坐标/经距）`，`z = 高程`。
 - 主单位：坐标、里程、半径、缓和曲线长、高程、拨量和抬落道量全部使用米。
-- 二进制配置：调用工程必须与库保持相同的 x64、Debug/Release 和 MSVC 运行库配置。不要把 Debug 库链接到 Release 程序，反之亦然。
+- 二进制配置：调用工程必须与 DLL 保持相同的 x64、Debug/Release 和 MSVC 运行库配置。Debug 使用 `/MDd`，Release 使用 `/MD`；不要混用配置。
 - 公共类型使用 `std::vector` 和 `std::string`，因此它是 MSVC C++ ABI，不是稳定的 C ABI。调用方更换不兼容工具集或运行库设置时，应重新编译本库。
 
-静态库不需要初始化函数，也不需要复制 DLL。调用方负责文件读取、坐标转换、数据持久化和界面显示。
+动态库不需要调用初始化函数。运行时必须让 `AlignmentReconstruct.dll` 位于调用方
+EXE/DLL/ARX 同目录或 Windows DLL 搜索路径中。调用方负责文件读取、坐标转换、
+数据持久化和界面显示。
 
-## 3. 构建静态库
+## 3. 构建动态库
 
 ### 3.1 使用 Visual Studio
 
@@ -44,10 +48,12 @@ cd AlignmentReconstruct
 2. 选择 `Debug | x64` 或 `Release | x64`。
 3. 生成项目 `AlignmentReconstruct`。
 
-输出文件：
+主要输出文件：
 
-- Debug：`build/Debug/AlignmentReconstruct.lib`
-- Release：`build/Release/AlignmentReconstruct.lib`
+- Debug：`build/Debug/AlignmentReconstruct.dll` 和导入库
+  `build/Debug/AlignmentReconstruct.lib`
+- Release：`build/Release/AlignmentReconstruct.dll` 和导入库
+  `build/Release/AlignmentReconstruct.lib`
 
 ### 3.2 使用命令行
 
@@ -74,11 +80,13 @@ MSYS2_ARG_CONV_EXCL='*' MSBuild.exe \
 <AlignmentReconstruct根目录>\include
 ```
 
-项目引用负责确定构建顺序并链接静态库。调用方仍需显式配置公共头文件目录。
+项目引用负责确定构建顺序并链接导入库。调用方仍需显式配置公共头文件目录，并
+确认引用属性中的“链接库依赖项”为“是”。
 
-如果调用方本身也是静态库，最终生成 EXE 或 DLL 的项目仍必须链接 `AlignmentReconstruct.lib`。
+如果调用方本身也是静态库，最终生成 EXE、DLL 或 ARX 的项目仍必须引用
+`AlignmentReconstruct` 或链接其导入库，并在运行目录部署 `AlignmentReconstruct.dll`。
 
-### 4.2 使用预编译 `.lib`
+### 4.2 使用预编译 DLL 和导入库
 
 在调用方 EXE/DLL 项目中配置：
 
@@ -89,8 +97,11 @@ MSYS2_ARG_CONV_EXCL='*' MSBuild.exe \
 | 链接器 → 输入 → 附加依赖项 | `AlignmentReconstruct.lib` |
 | C/C++ → 语言 → C++ 语言标准 | ISO C++17 或更高 |
 | 配置管理器 → 平台 | x64 |
+| C/C++ → 代码生成 → 运行库 | Release：`/MD`；Debug：`/MDd` |
 
-Debug 配置应改用 `build/Debug/AlignmentReconstruct.lib`。如果调用方使用 `/MT`、自定义迭代器调试级别或其他非默认运行库设置，应使用相同设置重新编译本库，避免 `LNK2038` 等 ABI 不匹配错误。
+Debug 配置应使用 `build/Debug` 中配套的 DLL 和导入库；Release 使用
+`build/Release`。不要让调用方使用 `/MT` 或 `/MTd` 跨越本 DLL 的公共 STL
+类型边界。自定义迭代器调试级别或不兼容工具集同样可能产生 ABI 错误。
 
 调用代码通常只需要：
 
@@ -575,7 +586,8 @@ bool report_errors(const Result& result) {
 
 | 现象 | 优先检查 |
 | --- | --- |
-| `LNK2019`，找不到公共函数 | 是否链接 `AlignmentReconstruct.lib`，库目录和配置是否正确 |
+| `LNK2019/LNK2001`，找不到公共函数 | 项目引用的“链接库依赖项”是否为“是”，是否链接当前配置的导入库 |
+| 启动时报找不到 `AlignmentReconstruct.dll` | DLL 是否与最终 EXE/DLL/ARX 同目录，或已加入 Windows DLL 搜索路径 |
 | `LNK1112` 或 machine type 冲突 | 调用方是否误用了 Win32；本库只提供 x64 |
 | `LNK2038` | Debug/Release、运行库、迭代器调试级别或工具集不一致 |
 | 输出里程整体偏移 | 是否遗漏 `AlignmentDefinition::start_station_m` |
@@ -613,8 +625,8 @@ bool report_errors(const Result& result) {
 ```text
 include/alignment_reconstruct/   公共头文件
 samples/main.cpp                 完整调用示例
-build/Debug/                     Debug 静态库、测试程序和示例程序
-build/Release/                   Release 静态库、测试程序和示例程序
+build/Debug/                     Debug DLL、导入库、测试程序和示例程序
+build/Release/                   Release DLL、导入库、测试程序和示例程序
 ```
 
 本库不提供：

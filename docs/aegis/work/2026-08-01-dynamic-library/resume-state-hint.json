@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-08-01-dynamic-library",
+  "lastCheckpointRef": "docs/aegis/work/2026-08-01-dynamic-library/todo-checkpoint-draft.json",
+  "resumeInstruction": "Use target repository status and verification record; do not redo algorithms",
+  "knownPartialWork": [
+    "DLL conversion and target verification"
+  ],
+  "mustReadBeforeContinuing": [
+    "docs/aegis/work/2026-08-01-dynamic-library/10-intent.md",
+    "docs/aegis/work/2026-08-01-dynamic-library/20-checkpoint.md",
+    "docs/aegis/work/2026-08-01-dynamic-library/todo-checkpoint-draft.json"
+  ],
+  "unsafeToAssume": [
+    "Third-party application ABI compatibility without an integration run"
+  ]
+}

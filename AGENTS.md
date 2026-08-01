@@ -2,7 +2,7 @@
 
 ## 1. 适用范围与目标
 
-本文件约束 `AlignmentReconstruct` 根目录及其全部子目录中的开发工作。项目是独立的 Visual Studio 2026、C++17、x64 静态库，生产代码只能依赖 C++17 标准库。不得引入 AutoCAD、ObjectARX、MFC、MDB、Excel、COM 或旧工程运行时依赖。
+本文件约束 `AlignmentReconstruct` 根目录及其全部子目录中的开发工作。项目是独立的 Visual Studio 2026、C++17、x64 动态库，生产代码只能依赖 C++17 标准库。不得引入 AutoCAD、ObjectARX、MFC、MDB、Excel、COM 或旧工程运行时依赖。
 
 库的公共能力有三项：
 
@@ -55,7 +55,10 @@ CAD 绘图、文件解析、数据库访问、任意拓扑点云寻路和旧插�
 - `AlignmentAdjustmentCalculator`：只编排平面投影与纵面求值，不得复制投影、符号、缓和曲线或竖曲线公式。
 - `PointCloudFitter`：唯一点云空间分箱、鲁棒局部拟合和 XY 弧长等间隔采样 owner；
   不得复制参数化线路建线、投影或纵面求值公式。
-- `tests/legacy_reference/`：仅用于测试数值对照，绝不能出现在生产项目或 `AlignmentReconstruct.lib` 中。
+- `tests/legacy_reference/`：仅用于测试数值对照，绝不能出现在生产 DLL 中。
+- `include/alignment_reconstruct/api.h`：DLL 可见性的唯一 owner；只有
+  `fit_point_cloud`、`reconstruct`、`calculate_adjustments` 使用导出宏，禁止导出
+  `detail::*` 或新增自动导出路径。
 
 依赖应从公共自由函数流向内部编排 owner，再流向 alignment 和 typed 几何线元。不要新增第二套投影、高程求值或重构实现，也不要建立通用算法“大杂烩”文件。
 
@@ -147,4 +150,7 @@ rg -n -i \
   include src AlignmentReconstruct.vcxproj
 ```
 
-预期无命中。交付前还要确认：Debug/Release 测试均退出 0、样例退出 0、新文件已进入正确项目、生产库未链接测试对象、相关文档已同步、未引入绝对测试数据路径。只报告本次实际执行过的验证；无法执行的检查要明确说明原因和剩余风险。
+预期无命中。交付前还要确认：Debug/Release 测试均退出 0、样例退出 0、
+`dumpbin /exports` 只有三个公共入口、测试和样例依赖 `AlignmentReconstruct.dll`、
+新文件已进入正确项目、生产 DLL 未链接测试对象、相关文档已同步、未引入绝对测试
+数据路径。只报告本次实际执行过的验证；无法执行的检查要明确说明原因和剩余风险。

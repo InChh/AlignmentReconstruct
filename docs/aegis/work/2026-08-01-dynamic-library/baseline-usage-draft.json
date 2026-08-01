@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-08-01-dynamic-library",
+  "requiredBaselineRefs": [
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md",
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md"
+  ],
+  "deliveredContextRefs": [],
+  "acknowledgedBeforePlanRefs": [
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md",
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md"
+  ],
+  "citedInPlanRefs": [
+    "docs/aegis/baseline/2026-07-13-revised-baseline.md",
+    "docs/aegis/specs/2026-07-13-alignment-reconstruct-design.md"
+  ],
+  "missingRefs": [],
+  "decision": "continue"
+}

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\alignment\adjustment_calculator.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\geometry\circle_fit.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\geometry\legacy_line_fit.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\geometry\line_fit.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\geometry\vector_math.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\horizontal\alignment_optimizer.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\horizontal\curvature_classifier.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\horizontal\horizontal_alignment.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\horizontal\horizontal_element.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\horizontal\horizontal_reconstructor.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\horizontal\legacy_horizontal_alignment.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\point_cloud\point_cloud_fitter.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\vertical\profile_classifier.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\vertical\vertical_alignment.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\vertical\vertical_reconstructor.cpp" />
+  </ItemGroup>
+</Project>

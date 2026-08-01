@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "target-verification",
+  "type": "build-test-export-verification",
+  "source": "docs/verification/2026-08-01-dll-build-and-link.md",
+  "summary": "Debug and Release Rebuild succeeded; each ran 48 tests with zero failures and the sample exited zero; each DLL exports exactly three public functions and consumers depend on it.",
+  "verifier": "Codex"
+}

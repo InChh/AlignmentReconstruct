@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "将静态库改为动态库，仅导出 fit_point_cloud、reconstruct 和 calculate_adjustments",
+  "goal": "保留现有 C++ API 与数值行为，通过 DLL 和导入库支持 Visual Studio 项目引用",
+  "successEvidence": [
+    "Debug/Release x64 Rebuild 成功",
+    "48 项测试失败 0 且样例退出 0",
+    "dumpbin 确认仅 3 个导出且调用目标依赖 DLL"
+  ],
+  "stopCondition": "目标项目验证通过，或 ABI/算法边界风险要求暂停",
+  "nonGoals": [
+    "C ABI",
+    "algorithm changes",
+    "static-library fallback"
+  ],
+  "scope": "公共导出可见性、MSBuild 产物、运行库、测试链接拓扑和文档",
+  "changeKinds": [
+    "architecture",
+    "build"
+  ],
+  "riskHints": [
+    "C++ STL ABI requires matching MSVC ABI and runtime"
+  ]
+}

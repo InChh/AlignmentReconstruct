@@ -1,12 +1,12 @@
 # AlignmentReconstruct 完整设计规格
 
 日期：`2026-07-13`  
-状态：`已实现；2026-07-16 平面活跃路径完成毫米级对齐；2026-07-27 纵面重构按 CRebuildDlg → CReBuildGMX 真实运行链完成小数点后对齐；2026-07-31 增加点云中心线拟合采样入口`
+状态：`已实现；2026-07-16 平面活跃路径完成毫米级对齐；2026-07-27 纵面重构按 CRebuildDlg → CReBuildGMX 真实运行链完成小数点后对齐；2026-07-31 增加点云中心线拟合采样入口；2026-08-01 改为三入口 DLL`
 架构审查：`需要`
 
 ## 1. 目标
 
-在 `D:\Programming\C++\Projects\既有线\AlignmentReconstruct` 建立独立的 Visual Studio 2026、C++17、x64 静态库项目，从既有 ObjectARX 工程中抽取纯数值算法，对外提供三项能力：
+在 `D:\Programming\C++\Projects\既有线\AlignmentReconstruct` 建立独立的 Visual Studio 2026、C++17、x64 动态库项目，从既有 ObjectARX 工程中抽取纯数值算法，对外提供三项能力：
 
 1. 输入行序无关、沿 X 方向单值展开的 XYZ 点云，拟合中心线并按 XY 水平弧长
    等间隔输出三维点。
@@ -146,6 +146,7 @@ AlignmentReconstruct/
   AlignmentReconstruct.sln
   README.md
   include/alignment_reconstruct/
+    api.h
     types.h
     point_cloud_fit.h
     reconstruction.h
@@ -162,12 +163,16 @@ AlignmentReconstruct/
     fixtures/
   samples/
   docs/aegis/
+  AlignmentReconstruct.InternalSources.props
 ```
 
 解决方案包含：
 
-- `AlignmentReconstruct`：C++17 x64 静态库，平台工具集 `v145`，只依赖 C++ 标准库。
-- `AlignmentReconstruct.Tests`：C++17 x64 控制台测试程序，只链接静态库和测试专用参考实现。
+- `AlignmentReconstruct`：C++17 x64 DLL，平台工具集 `v145`，只依赖 C++ 标准库；
+  只导出三个公共自由函数。
+- `AlignmentReconstruct.Tests`：C++17 x64 控制台测试程序；公共入口通过项目引用和
+  导入库调用，白盒 `detail::*` 测试从共享内部源清单直接编译，测试专用参考实现不
+  进入生产 DLL。
 
 必须支持 `Debug|x64` 和 `Release|x64`。
 
@@ -452,7 +457,7 @@ PointCloudFitResult fit_point_cloud(
 
 ### 12.3 旧行为对照
 
-`tests/legacy_reference` 只保留受支持契约所需的最小旧公式和状态，不包含 ARX/MFC 头文件，也不链接到生产静态库。生产路径与参考路径使用相同夹具并比较：
+`tests/legacy_reference` 只保留受支持契约所需的最小旧公式和状态，不包含 ARX/MFC 头文件，也不链接到生产 DLL。生产路径与参考路径使用相同夹具并比较：
 
 - 平面交点、半径和两个缓长；
 - 纵面变坡点里程、高程和竖曲线半径；
@@ -463,7 +468,7 @@ PointCloudFitResult fit_point_cloud(
 
 ### 12.4 独立性扫描
 
-静态库工程、生产源文件和公共头文件不得出现：`afx`、`AcDb`、`AcGe`、`ObjectARX`、`CString`、`ads_`、`aced`、`XLDataBase` 或 Excel 自动化类型。
+动态库工程、生产源文件和公共头文件不得出现：`afx`、`AcDb`、`AcGe`、`ObjectARX`、`CString`、`ads_`、`aced`、`XLDataBase` 或 Excel 自动化类型。
 
 ### 12.5 构建矩阵
 
@@ -500,7 +505,7 @@ PointCloudFitResult fit_point_cloud(
 
 只有同时满足下列条件才可声明完成：
 
-1. `AlignmentReconstruct.sln`、静态库和测试工程位于指定目录。
+1. `AlignmentReconstruct.sln`、DLL、导入库和测试工程位于指定目录。
 2. 三个公共操作均完成真实实现。
 3. 重构输出完整包含平面参数和纵面里程、高程、竖曲线半径。
 4. 联合计算逐点输出投影里程、投影坐标、设计高程、拨量和抬落道量。
@@ -515,7 +520,7 @@ PointCloudFitResult fit_point_cloud(
 
 实现 Agent 必须按以下顺序推进，前一阶段通过测试后再进入下一阶段：
 
-1. 建立 `AlignmentReconstruct.sln`、静态库、测试工程和公共值类型；先完成无 ARX/MFC 依赖扫描。
+1. 建立 `AlignmentReconstruct.sln`、DLL、导入库、测试工程和公共值类型；先完成无 ARX/MFC 依赖扫描。
 2. 实现纯 C++ 基础几何、typed horizontal elements、`getBPMTL` 对照和按里程求点。
 3. 实现 `HorizontalAlignment` 最近投影与拨量，先用人工已知线路夹具对照 `PROJ_ML`/`CalRectification`。
 4. 实现 `VerticalAlignment` 和竖曲线按里程求高程，对照 `MLToH_Bas`/`VerticleArc`。
@@ -528,7 +533,7 @@ PointCloudFitResult fit_point_cloud(
 
 必须交付：
 
-- 可被其他 C++17 工程链接的 `.lib` 和公共头文件；
+- 可被其他兼容 MSVC C++17 工程使用的 DLL、导入库和公共头文件；
 - 演示三个公共能力串联调用的控制台 sample；
 - 确定性夹具和测试可执行程序；
 - `tests/legacy_reference` 最小参考实现及来源映射；

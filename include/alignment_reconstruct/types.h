@@ -123,7 +123,9 @@ struct ReconstructionResult {
     std::vector<double> projected_stations_m;
     std::vector<Diagnostic> diagnostics;
 
-    bool ok() const noexcept;
+    bool ok() const noexcept {
+        return status == StatusCode::success;
+    }
 };
 
 struct PointCloudFitResult {
@@ -131,7 +133,9 @@ struct PointCloudFitResult {
     std::vector<Point3D> centerline_points;
     std::vector<Diagnostic> diagnostics;
 
-    bool ok() const noexcept;
+    bool ok() const noexcept {
+        return status == StatusCode::success;
+    }
 };
 
 struct PointAdjustment {
@@ -143,8 +147,13 @@ struct PointAdjustment {
     double lift_drop_m = 0.0;
     HorizontalElementKind horizontal_element = HorizontalElementKind::straight;
 
-    double horizontal_offset_mm() const noexcept;
-    double lift_drop_mm() const noexcept;
+    double horizontal_offset_mm() const noexcept {
+        return horizontal_offset_m * 1000.0;
+    }
+
+    double lift_drop_mm() const noexcept {
+        return lift_drop_m * 1000.0;
+    }
 };
 
 struct AdjustmentCalculationResult {
@@ -152,7 +161,9 @@ struct AdjustmentCalculationResult {
     std::vector<PointAdjustment> points;
     std::vector<Diagnostic> diagnostics;
 
-    bool ok() const noexcept;
+    bool ok() const noexcept {
+        return status == StatusCode::success;
+    }
 };
 
 } // namespace alignment_reconstruct

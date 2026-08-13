@@ -1109,24 +1109,9 @@ void rebuild_intermediate_elevations(
     }
 }
 
-void refresh_output_elevations(
+void finalize_output_slope_geometry(
     std::vector<SlopePoint>& slopes) {
-    if (slopes.empty()) {
-        return;
-    }
-    for (std::size_t index = 0; index + 1 < slopes.size(); ++index) {
-        slopes[index].length_m =
-            slopes[index + 1].station_m - slopes[index].station_m;
-        slopes[index + 1].elevation_m =
-            slopes[index].elevation_m +
-            slopes[index].grade * slopes[index].length_m;
-        slopes[index].grade =
-            (slopes[index + 1].elevation_m -
-             slopes[index].elevation_m) /
-            slopes[index].length_m;
-    }
-    slopes.back().grade = 0.0;
-    slopes.back().length_m = 0.0;
+    recalculate_slope_segments(slopes);
 }
 
 double truncate_limit_grade_per_mille(
@@ -1416,7 +1401,7 @@ ReconstructionCandidate reconstruct_for_threshold(
     ReconstructionCandidate candidate;
     candidate.slopes = std::move(slopes);
     auto output_slopes = candidate.slopes;
-    refresh_output_elevations(output_slopes);
+    finalize_output_slope_geometry(output_slopes);
     candidate.controls = to_public_controls(output_slopes);
     const VerticalAlignment closure(candidate.controls);
     (void)closure;

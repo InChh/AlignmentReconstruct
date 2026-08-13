@@ -120,7 +120,7 @@ AR_TEST(rebuild_path_rounds_every_internal_slope_station) {
         1.0e-8);
 }
 
-AR_TEST(full_coordinate_output_refreshes_the_last_elevation) {
+AR_TEST(rebuild_entity_output_preserves_the_fitted_last_elevation) {
     std::vector<detail::ProfileSample> samples;
     constexpr double intersection_station_m = 1003.25;
     constexpr double incoming_grade = 0.004;
@@ -165,7 +165,11 @@ AR_TEST(full_coordinate_output_refreshes_the_last_elevation) {
         (actual[2].elevation_m - actual[1].elevation_m) /
         (actual[2].station_m - actual[1].station_m);
     AR_EXPECT_NEAR(actual_incoming_grade_per_mille, 4.0, 1.0e-10);
-    AR_EXPECT_NEAR(actual_outgoing_grade_per_mille, 6.01, 1.0e-10);
+    AR_EXPECT_NEAR(actual_outgoing_grade_per_mille, 6.006, 1.0e-10);
+    AR_EXPECT_NEAR(
+        actual[2].elevation_m,
+        samples.back().elevation_m,
+        1.0e-10);
 }
 
 AR_TEST(vertical_reconstruction_matches_active_legacy_grade_and_radius_fit) {

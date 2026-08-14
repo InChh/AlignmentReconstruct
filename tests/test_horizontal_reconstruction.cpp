@@ -2,6 +2,7 @@
 #include "test_framework.h"
 
 #include "geometry/vector_math.h"
+#include "horizontal/alignment_optimizer.h"
 #include "horizontal/curvature_classifier.h"
 #include "horizontal/horizontal_alignment.h"
 #include "horizontal/horizontal_reconstructor.h"
@@ -12,6 +13,85 @@
 #include <vector>
 
 using namespace alignment_reconstruct;
+
+AR_TEST(horizontal_output_options_preserve_parameters_when_disabled) {
+    const detail::HorizontalCurveParameters input{123.5, 45.5, 52.5, 9.25};
+
+    const auto actual = detail::apply_horizontal_output_options(input, {});
+
+    AR_EXPECT_NEAR(actual.radius_m, input.radius_m, 0.0);
+    AR_EXPECT_NEAR(actual.entry_spiral_length_m, input.entry_spiral_length_m, 0.0);
+    AR_EXPECT_NEAR(actual.exit_spiral_length_m, input.exit_spiral_length_m, 0.0);
+    AR_EXPECT_NEAR(actual.mean_squared_offset_m2, input.mean_squared_offset_m2, 0.0);
+}
+
+AR_TEST(horizontal_output_options_match_the_reference_rounding_steps) {
+    struct RadiusCase {
+        double step_m;
+        double expected_m;
+    };
+    const std::vector<RadiusCase> radius_cases{
+        {1.0, 176.0}, {10.0, 180.0}, {50.0, 200.0}, {100.0, 200.0}
+    };
+    for (const auto& test_case : radius_cases) {
+        ReconstructionOptions options;
+        options.horizontal_curve_radius_rounding_m = test_case.step_m;
+        const auto actual = detail::apply_horizontal_output_options(
+            {176.0, 47.0, 63.0, 2.0}, options);
+        AR_EXPECT_NEAR(actual.radius_m, test_case.expected_m, 1.0e-12);
+    }
+
+    struct SpiralCase {
+        double step_m;
+        double expected_entry_m;
+        double expected_exit_m;
+    };
+    const std::vector<SpiralCase> spiral_cases{
+        {1.0, 47.0, 63.0}, {5.0, 45.0, 65.0}, {10.0, 50.0, 60.0}
+    };
+    for (const auto& test_case : spiral_cases) {
+        ReconstructionOptions options;
+        options.horizontal_spiral_length_rounding_m = test_case.step_m;
+        const auto actual = detail::apply_horizontal_output_options(
+            {176.0, 47.0, 63.0, 2.0}, options);
+        AR_EXPECT_NEAR(
+            actual.entry_spiral_length_m, test_case.expected_entry_m, 1.0e-12);
+        AR_EXPECT_NEAR(
+            actual.exit_spiral_length_m, test_case.expected_exit_m, 1.0e-12);
+    }
+}
+
+AR_TEST(horizontal_output_options_keep_exact_half_steps_on_the_lower_multiple) {
+    ReconstructionOptions options;
+    options.horizontal_curve_radius_rounding_m = 10.0;
+
+    const auto below_half = detail::apply_horizontal_output_options(
+        {124.999, 0.0, 0.0, 1.0}, options);
+    const auto exact_half = detail::apply_horizontal_output_options(
+        {125.0, 0.0, 0.0, 1.0}, options);
+    const auto above_half = detail::apply_horizontal_output_options(
+        {125.001, 0.0, 0.0, 1.0}, options);
+
+    AR_EXPECT_NEAR(below_half.radius_m, 120.0, 1.0e-12);
+    AR_EXPECT_NEAR(exact_half.radius_m, 120.0, 1.0e-12);
+    AR_EXPECT_NEAR(above_half.radius_m, 130.0, 1.0e-12);
+}
+
+AR_TEST(horizontal_output_options_equalize_before_rounding) {
+    ReconstructionOptions equal_only;
+    equal_only.equalize_horizontal_spiral_lengths = true;
+    const auto equalized = detail::apply_horizontal_output_options(
+        {500.0, 14.0, 18.0, 7.0}, equal_only);
+    AR_EXPECT_NEAR(equalized.entry_spiral_length_m, 16.0, 0.0);
+    AR_EXPECT_NEAR(equalized.exit_spiral_length_m, 16.0, 0.0);
+    AR_EXPECT_NEAR(equalized.mean_squared_offset_m2, 7.0, 0.0);
+
+    equal_only.horizontal_spiral_length_rounding_m = 10.0;
+    const auto equalized_then_rounded = detail::apply_horizontal_output_options(
+        {500.0, 14.0, 18.0, 7.0}, equal_only);
+    AR_EXPECT_NEAR(equalized_then_rounded.entry_spiral_length_m, 20.0, 0.0);
+    AR_EXPECT_NEAR(equalized_then_rounded.exit_spiral_length_m, 20.0, 0.0);
+}
 
 AR_TEST(horizontal_reconstruction_recovers_a_deterministic_spiral_curve) {
     const std::vector<HorizontalControlPoint> expected{
@@ -83,7 +163,12 @@ AR_TEST(field_horizontal_reconstruction_recovers_all_mdb_control_points) {
         directory / "k1413_k1462_points.csv");
     const auto expected_rows = test_support::read_horizontal_fixture(
         directory / "k1413_k1462_horizontal.csv");
-    const detail::HorizontalReconstructor reconstructor({});
+    // This fixture's expected values were verified while 0.00008 was the
+    // public default; keep that historical parameter explicit now that the
+    // public default is 0.001.
+    ReconstructionOptions options;
+    options.curvature_threshold_inverse_m = 0.00008;
+    const detail::HorizontalReconstructor reconstructor(options);
     const auto actual = reconstructor.reconstruct(points);
     AR_EXPECT(actual.size() == expected_rows.size());
 

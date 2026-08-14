@@ -28,14 +28,52 @@ std::vector<Point2D> copy_range(
         points.begin() + static_cast<std::ptrdiff_t>(last + 1));
 }
 
+double round_horizontal_parameter(double value_m, double rounding_m) {
+    if (!(rounding_m > 0.0)) {
+        return value_m;
+    }
+    const double whole = std::trunc(value_m / rounding_m);
+    const double remainder = value_m - whole * rounding_m;
+    // The active legacy Digit helper leaves an exact half step on the lower multiple.
+    const double increment = remainder > rounding_m * 0.5 ? 1.0 : 0.0;
+    return (whole + increment) * rounding_m;
+}
+
 } // namespace
+
+HorizontalCurveParameters apply_horizontal_output_options(
+    HorizontalCurveParameters parameters,
+    const ReconstructionOptions& options) {
+    if (options.equalize_horizontal_spiral_lengths) {
+        const double equal_length_m =
+            (parameters.entry_spiral_length_m + parameters.exit_spiral_length_m) * 0.5;
+        parameters.entry_spiral_length_m = equal_length_m;
+        parameters.exit_spiral_length_m = equal_length_m;
+    }
+    parameters.radius_m = round_horizontal_parameter(
+        parameters.radius_m, options.horizontal_curve_radius_rounding_m);
+    parameters.entry_spiral_length_m = round_horizontal_parameter(
+        parameters.entry_spiral_length_m,
+        options.horizontal_spiral_length_rounding_m);
+    parameters.exit_spiral_length_m = round_horizontal_parameter(
+        parameters.exit_spiral_length_m,
+        options.horizontal_spiral_length_rounding_m);
+    return parameters;
+}
 
 HorizontalReconstructor::HorizontalReconstructor(ReconstructionOptions options)
     : options_(std::move(options)) {}
 
 std::vector<HorizontalControlPoint> HorizontalReconstructor::reconstruct(
     const std::vector<Point2D>& ordered_points) const {
-    const auto analysis = classify_horizontal_samples(ordered_points, options_);
+    return reconstruct_with_curvature_graph(ordered_points).controls;
+}
+
+HorizontalReconstruction HorizontalReconstructor::reconstruct_with_curvature_graph(
+    const std::vector<Point2D>& ordered_points,
+    const std::vector<HorizontalCurvatureSample>& curvature_graph) const {
+    const auto analysis = classify_horizontal_samples(
+        ordered_points, options_, curvature_graph);
     std::vector<FittedStraightRun> straight_runs;
     for (const auto& segment : analysis.straight_segments) {
         const auto points = copy_range(
@@ -74,19 +112,21 @@ std::vector<HorizontalControlPoint> HorizontalReconstructor::reconstruct(
     for (std::size_t index = 0; index < curve_count; ++index) {
         const auto& incoming_segment = straight_runs[index].segment;
         const auto& outgoing_segment = straight_runs[index + 1].segment;
-        const auto parameters = fit_horizontal_curve(
-            ordered_points,
-            incoming_segment.circular_first_index,
-            incoming_segment.circular_last_index,
-            incoming_segment.first_index,
-            outgoing_segment.last_index,
-            straight_runs[index].fit.line,
-            straight_runs[index + 1].fit.line,
-            straight_runs[index].fit.start,
-            straight_runs[index].fit.end,
-            straight_runs[index + 1].fit.start,
-            straight_runs[index + 1].fit.end,
-            intersections[index],
+        const auto parameters = apply_horizontal_output_options(
+            fit_horizontal_curve(
+                ordered_points,
+                incoming_segment.circular_first_index,
+                incoming_segment.circular_last_index,
+                incoming_segment.first_index,
+                outgoing_segment.last_index,
+                straight_runs[index].fit.line,
+                straight_runs[index + 1].fit.line,
+                straight_runs[index].fit.start,
+                straight_runs[index].fit.end,
+                straight_runs[index + 1].fit.start,
+                straight_runs[index + 1].fit.end,
+                intersections[index],
+                options_),
             options_);
         controls.push_back({
             HorizontalControlPointKind::intersection,
@@ -104,7 +144,7 @@ std::vector<HorizontalControlPoint> HorizontalReconstructor::reconstruct(
 
     const HorizontalAlignment closure_check(controls, options_.start_station_m);
     (void)closure_check;
-    return controls;
+    return {std::move(controls), analysis.curvature_graph};
 }
 
 } // namespace alignment_reconstruct::detail

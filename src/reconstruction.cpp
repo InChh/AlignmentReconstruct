@@ -5,6 +5,7 @@
 #include "vertical/profile_classifier.h"
 #include "vertical/vertical_reconstructor.h"
 
+#include <algorithm>
 #include <cmath>
 #include <exception>
 #include <stdexcept>
@@ -43,7 +44,9 @@ bool finite_options(const ReconstructionOptions& options) {
         !std::isfinite(options.vertical_curve_radius_rounding_m) ||
         !std::isfinite(options.grade_rounding_per_mille) ||
         !std::isfinite(options.station_rounding_m) ||
-        !std::isfinite(options.station_monotonicity_tolerance_m)) {
+        !std::isfinite(options.station_monotonicity_tolerance_m) ||
+        !std::isfinite(options.horizontal_curve_radius_rounding_m) ||
+        !std::isfinite(options.horizontal_spiral_length_rounding_m)) {
         return false;
     }
     for (const double threshold : options.vertical_second_difference_threshold_candidates) {
@@ -54,11 +57,101 @@ bool finite_options(const ReconstructionOptions& options) {
     return true;
 }
 
+bool valid_horizontal_sample_property(HorizontalSampleProperty property) {
+    switch (property) {
+    case HorizontalSampleProperty::straight:
+    case HorizontalSampleProperty::curve:
+        return true;
+    }
+    return false;
+}
+
+ReconstructionResult validate_curvature_graph(
+    const std::vector<Point3D>& ordered_points,
+    const ReconstructionOptions& options,
+    const std::vector<HorizontalCurvatureSample>& curvature_graph) {
+    if (curvature_graph.empty()) {
+        return {};
+    }
+    if (curvature_graph.size() != ordered_points.size()) {
+        return error_result(
+            StatusCode::invalid_input,
+            DiagnosticCode::curvature_graph_size_mismatch,
+            no_input_index,
+            "Curvature graph size must match the ordered point count");
+    }
+    for (std::size_t index = 0; index < curvature_graph.size(); ++index) {
+        if (!std::isfinite(curvature_graph[index].curvature_inverse_m)) {
+            return error_result(
+                StatusCode::invalid_input,
+                DiagnosticCode::non_finite_value,
+                index,
+                "Curvature graph contains a non-finite curvature");
+        }
+        if (!valid_horizontal_sample_property(curvature_graph[index].property)) {
+            return error_result(
+                StatusCode::invalid_input,
+                DiagnosticCode::invalid_horizontal_sample_property,
+                index,
+                "Curvature graph contains an invalid horizontal sample property");
+        }
+    }
+
+    const std::size_t minimum_curve_count =
+        std::max<std::size_t>(3, options.minimum_curve_sample_count);
+    std::size_t run_first = 0;
+    while (run_first < curvature_graph.size()) {
+        const HorizontalSampleProperty property =
+            curvature_graph[run_first].property;
+        std::size_t run_last = run_first + 1;
+        while (run_last < curvature_graph.size() &&
+               curvature_graph[run_last].property == property) {
+            ++run_last;
+        }
+        const std::size_t run_count = run_last - run_first;
+        const std::size_t minimum_count =
+            property == HorizontalSampleProperty::straight
+                ? 2
+                : minimum_curve_count;
+        if (run_count < minimum_count) {
+            return error_result(
+                StatusCode::invalid_input,
+                DiagnosticCode::invalid_curvature_graph_shape,
+                run_first,
+                "Curvature graph contains a line/curve run with too few samples");
+        }
+        run_first = run_last;
+    }
+    if (curvature_graph.front().property != HorizontalSampleProperty::straight ||
+        curvature_graph.back().property != HorizontalSampleProperty::straight) {
+        const std::size_t index =
+            curvature_graph.front().property != HorizontalSampleProperty::straight
+                ? 0
+                : curvature_graph.size() - 1;
+        return error_result(
+            StatusCode::invalid_input,
+            DiagnosticCode::invalid_curvature_graph_shape,
+            index,
+            "Curvature graph must start and end with straight samples");
+    }
+    if (curvature_graph.size() > 4 &&
+        curvature_graph[curvature_graph.size() - 2].property !=
+            HorizontalSampleProperty::straight) {
+        return error_result(
+            StatusCode::invalid_input,
+            DiagnosticCode::invalid_curvature_graph_shape,
+            curvature_graph.size() - 2,
+            "Curvature graph must preserve the straight route-end classification");
+    }
+    return {};
+}
+
 } // namespace
 
 ReconstructionResult reconstruct(
     const std::vector<Point3D>& ordered_points,
-    const ReconstructionOptions& options) {
+    const ReconstructionOptions& options,
+    const std::vector<HorizontalCurvatureSample>& curvature_graph) {
     if (ordered_points.size() < 2) {
         return error_result(StatusCode::invalid_input, DiagnosticCode::too_few_points,
                             no_input_index, "At least two ordered XYZ points are required");
@@ -77,7 +170,9 @@ ReconstructionResult reconstruct(
         options.vertical_curve_radius_rounding_m < 0.0 ||
         options.grade_rounding_per_mille < 0.0 ||
         options.station_rounding_m < 0.0 ||
-        options.station_monotonicity_tolerance_m < 0.0) {
+        options.station_monotonicity_tolerance_m < 0.0 ||
+        options.horizontal_curve_radius_rounding_m < 0.0 ||
+        options.horizontal_spiral_length_rounding_m < 0.0) {
         return error_result(StatusCode::invalid_input, DiagnosticCode::non_finite_value,
                             no_input_index, "Reconstruction options are invalid");
     }
@@ -97,11 +192,21 @@ ReconstructionResult reconstruct(
         }
         horizontal_samples.push_back({point.x, point.y});
     }
+    const ReconstructionResult graph_validation =
+        validate_curvature_graph(ordered_points, options, curvature_graph);
+    if (!graph_validation.ok()) {
+        return graph_validation;
+    }
 
     ReconstructionResult result;
     try {
         const detail::HorizontalReconstructor horizontal_reconstructor(options);
-        result.horizontal = horizontal_reconstructor.reconstruct(horizontal_samples);
+        auto horizontal_reconstruction =
+            horizontal_reconstructor.reconstruct_with_curvature_graph(
+                horizontal_samples, curvature_graph);
+        result.horizontal = std::move(horizontal_reconstruction.controls);
+        result.curvature_graph =
+            std::move(horizontal_reconstruction.curvature_graph);
         const detail::HorizontalAlignment horizontal(result.horizontal, options.start_station_m);
         result.projected_stations_m.reserve(ordered_points.size());
         std::vector<detail::ProfileSample> vertical_samples;

@@ -218,7 +218,8 @@ lift_drop_m = design_elevation_m - measured_z
 ```cpp
 ReconstructionResult reconstruct(
     const std::vector<Point3D>& ordered_points,
-    const ReconstructionOptions& options = {});
+    const ReconstructionOptions& options = {},
+    const std::vector<HorizontalCurvatureSample>& curvature_graph = {});
 ```
 
 ### 7.2 输入要求
@@ -235,6 +236,13 @@ ReconstructionResult reconstruct(
 建议保留测量原始顺序，并让每种线形区段包含多个测点。采样明显稀疏时，应结合采样间距调整 `curvature_window_m` 和分类阈值，并用已知线路做回归验证。
 
 如果只有 N/E、没有真实 z，可以使用常量 z 临时验证平面重构，但由此得到的纵断面没有业务意义，不能当作真实纵断面成果。
+
+`curvature_graph` 为空时，库按 `curvature_window_m`、
+`curvature_threshold_inverse_m` 和现有稳定化流程自动完成直曲分段。非空时，它必须与
+`ordered_points` 一一对应；库直接采用调用方给出的直曲属性，跳过自动曲率计算、阈值分类
+和直曲稳定化，然后继续执行直线段形成、缓和曲线识别/摆动、圆曲线与交点拟合、参数优化
+和整饰。非空图的数量不一致、非有限曲率、非法属性或不合法分段形状都会返回
+`invalid_input`，不会静默修改或丢弃调用方的逐点属性。
 
 ### 7.3 调用示例
 
@@ -290,6 +298,23 @@ int main() {
 }
 ```
 
+自动结果可以原样回灌，复用同一次直曲分段：
+
+```cpp
+const ReconstructionResult automatic = reconstruct(ordered_points, options);
+if (!automatic.ok()) {
+    // 处理诊断
+}
+const ReconstructionResult reused = reconstruct(
+    ordered_points, options, automatic.curvature_graph);
+```
+
+`HorizontalCurvatureSample::curvature_inverse_m` 是带符号曲率，单位 `1/m`；
+`HorizontalSampleProperty::straight = 0`，`curve = 1`。这里的属性对应旧流程第一个
+“直曲自动分段”按钮完成后的直线/曲线二态，不是后续 `IDSpiral` 内部使用的
+直线/圆曲线/缓和曲线三态。提供图时，成功结果会原样返回该图；自动路径返回实际送入
+后续平面拟合的图，因此回灌时即使修改曲率窗口或直曲阈值，也不会重新分类。
+
 ### 7.4 输出字段
 
 `ReconstructionResult`：
@@ -300,7 +325,12 @@ int main() {
 | `horizontal` | 平面起点、中间交点和终点 |
 | `vertical` | 纵断面起点、变坡点和终点 |
 | `projected_stations_m` | 每个输入点在重构平面线路上的投影里程；顺序和数量与输入一致 |
+| `curvature_graph` | 实际用于本次平面拟合的逐点曲率与 0/1 直曲属性；顺序和数量与输入一致 |
 | `diagnostics` | 错误位置、错误码和可读信息 |
+
+这些输出字段只在 `status == success` 时有效。重构失败时，`horizontal`、`vertical`、
+`projected_stations_m` 和 `curvature_graph` 均为空，调用方应只使用 `status` 与
+`diagnostics` 定位失败。
 
 平面控制点：
 
@@ -452,11 +482,14 @@ const AdjustmentCalculationResult changed =
 | --- | ---: | --- |
 | `start_station_m` | `0` | 线路起点里程，m |
 | `curvature_window_m` | `15` | 平面切向和曲率分析窗口，m |
-| `curvature_threshold_inverse_m` | `0.00008` | 直/曲分类阈值，`1/m`；降低会把更多样本判为曲线 |
+| `curvature_threshold_inverse_m` | `0.001` | 初始直/曲分类阈值，`1/m`；降低会让更多样本进入初始曲线分类，但后续稳定化仍可能重新分类，不能保证增加最终曲线段数 |
 | `minimum_curve_sample_count` | `3` | 一个圆曲线分类段必须保留的最少样本数 |
 | `maximum_spiral_classification_iterations` | `300` | 缓和曲线分类稳定化最大迭代次数 |
 | `horizontal_optimization_tolerance` | `1e-4` | 半径和缓长 Powell 优化的相对收敛容差 |
 | `horizontal_optimization_max_iterations` | `10` | 平面 Powell 优化最大迭代次数 |
+| `horizontal_curve_radius_rounding_m` | `0` | 平面圆曲线半径取整步长，m；0 表示不取整 |
+| `horizontal_spiral_length_rounding_m` | `0` | 进、出口缓和曲线长共用的取整步长，m；0 表示不取整 |
+| `equalize_horizontal_spiral_lengths` | `false` | 是否在优化后把每个交点的进、出口缓长设为二者算术平均值 |
 | `vertical_second_difference_threshold_candidates` | `{0.001}` | 纵面二阶差商阈值。单元素表示固定阈值；传入多个候选时，库逐一完成重构并按参考项目的厘米级抬落道平方和选优 |
 | `minimum_grade_length_m` | `350` | 小于该长度的短坡段会参与合并，m；0 表示不按长度合并 |
 | `maximum_up_grade` | `25` | 最大上坡坡度，‰；0 表示不限制 |
@@ -469,6 +502,23 @@ const AdjustmentCalculationResult changed =
 | `grade_rounding_per_mille` | `0.01` | 坡度归整步长，‰；0 表示不归整 |
 | `station_rounding_m` | `10` | 内部变坡点里程归整步长，m；短坡二次合并和竖缓避让产生的新位置也使用该精度，0 表示不归整 |
 | `station_monotonicity_tolerance_m` | `1e-6` | 判断投影里程反向的容差，m |
+
+自动直曲分段先按调用方选项中的初始阈值（默认 `0.001 1/m`）完成分类和直曲稳定化，再处理反向曲线与短曲线，
+最后只执行一次“直线点平均曲率 × 6”的动态调整；不再执行此前的 × 5 调整。
+
+平面成果整饰顺序与参考项目的活跃路径一致：先完成现有的
+`(进口缓长, 半径, 出口缓长)` 三变量优化，再按需将两个缓长取算术平均，
+最后依次取整半径和两个缓长。参考对话框的标准映射为：半径
+`0/1/10/50/100 m`，缓长 `0/1/5/10 m`。数值 API 也接受其他有限非负步长。
+取整遵循参考 `Digit` 行为：只有余数严格大于半个步长才进位，恰好半步保留在较低档。
+
+负数、NaN 或无穷大取整步长返回 `invalid_input`。如果取整或等缓长使半径归零、
+曲线重叠或几何无法闭合，重构会明确失败，不会回退到未整饰方案。返回的平面控制点、
+`projected_stations_m` 和纵面样本始终来自同一套已整饰平面线路。
+
+本版在 `ReconstructionOptions` 末尾增加了上述三个字段，并为 `reconstruct` 增加可选曲率图
+参数、为 `ReconstructionResult` 增加曲率图结果，公共结构体布局和函数符号均已变化。调用方
+必须使用新公共头文件重新编译，并部署同一次构建生成的导入库和 DLL，不得混用新旧版本。
 
 参数调整建议：
 
@@ -577,6 +627,9 @@ bool report_errors(const Result& result) {
 | `overlapping_vertical_curves` | 竖曲线超出相邻坡段或互相重叠 |
 | `degenerate_fit` | 测点不足以形成稳定拟合，或拟合几何退化 |
 | `projection_failed` | 测点无法稳定投影到平面线路 |
+| `curvature_graph_size_mismatch` | 非空曲率图数量与 `ordered_points` 不一致 |
+| `invalid_horizontal_sample_property` | 曲率图属性不是 `straight(0)` 或 `curve(1)` |
+| `invalid_curvature_graph_shape` | 曲率图端部或连续直/曲区段不足以形成有效拟合 |
 | `invalid_sample_interval` | 点云采样间隔不是有限正数，或会产生过多输出点 |
 | `insufficient_spatial_support` | 点云有效 X 分箱不足，或某个已占用分箱少于 3 个点 |
 
@@ -614,7 +667,11 @@ bool report_errors(const Result& result) {
 - 平面建线、按里程求点、最近投影和右正左负拨量。
 - 圆竖曲线、变坡点、设计高程和抬落道量。
 - 平纵重构闭环。
+- 自动直曲曲率图输出、0/1 属性语义、原样回灌等价和提供图后跳过阈值/窗口分类。
+- 含 4 条显著曲线和 1 条弱曲线的同一合成线路：默认 `0.001 1/m` 和只保留最终 × 6 动态调整的自动分段得到 4 条曲线；把初始阈值降至 `3.9e-5 1/m` 后，该区间仍被稳定化为直线，结果仍为 4 条；人工编辑曲率图后才拟合出 5 条曲线。
+- 曲率图数量、有限值、属性枚举和分段形状的稳定失败诊断。
 - 重构后修改交点，再使用 `calculate_adjustments` 计算原测点拨量。
+- 平面半径/缓长取整、恰好半步不进位、前后缓长相等及“先平均后取整”顺序。
 - 点云行序不变性、鲁棒中心线拟合、XY 弧长等间隔采样和稳定失败诊断。
 - Debug/Release x64 构建。
 

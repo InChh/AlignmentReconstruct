@@ -32,6 +32,7 @@ struct HorizontalSampleAnalysis {
     std::vector<double> cumulative_distance_m;
     std::vector<double> tangent_heading_rad;
     std::vector<double> curvature_inverse_m;
+    std::vector<HorizontalCurvatureSample> curvature_graph;
     std::vector<bool> curved;
     std::vector<ClassificationRun> runs;
     std::vector<HorizontalSampleKind> sample_kind;
@@ -40,6 +41,7 @@ struct HorizontalSampleAnalysis {
 
 HorizontalSampleAnalysis classify_horizontal_samples(
     const std::vector<Point2D>& ordered_points,
-    const ReconstructionOptions& options);
+    const ReconstructionOptions& options,
+    const std::vector<HorizontalCurvatureSample>& curvature_graph = {});
 
 } // namespace alignment_reconstruct::detail

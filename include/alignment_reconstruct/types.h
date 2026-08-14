@@ -31,6 +31,16 @@ enum class HorizontalElementKind {
     exit_spiral
 };
 
+enum class HorizontalSampleProperty {
+    straight = 0,
+    curve = 1
+};
+
+struct HorizontalCurvatureSample {
+    double curvature_inverse_m = 0.0;
+    HorizontalSampleProperty property = HorizontalSampleProperty::straight;
+};
+
 struct HorizontalControlPoint {
     HorizontalControlPointKind kind = HorizontalControlPointKind::intersection;
     Point2D position{};
@@ -80,7 +90,10 @@ enum class DiagnosticCode {
     degenerate_fit,
     projection_failed,
     invalid_sample_interval,
-    insufficient_spatial_support
+    insufficient_spatial_support,
+    curvature_graph_size_mismatch,
+    invalid_horizontal_sample_property,
+    invalid_curvature_graph_shape
 };
 
 inline constexpr std::size_t no_input_index = std::numeric_limits<std::size_t>::max();
@@ -95,7 +108,7 @@ struct Diagnostic {
 struct ReconstructionOptions {
     double start_station_m = 0.0;
     double curvature_window_m = 15.0;
-    double curvature_threshold_inverse_m = 0.00008;
+    double curvature_threshold_inverse_m = 0.001;
     std::size_t minimum_curve_sample_count = 3;
     std::size_t maximum_spiral_classification_iterations = 300;
     double horizontal_optimization_tolerance = 1.0e-4;
@@ -114,6 +127,9 @@ struct ReconstructionOptions {
     double grade_rounding_per_mille = 0.01;
     double station_rounding_m = 10.0;
     double station_monotonicity_tolerance_m = 1.0e-6;
+    double horizontal_curve_radius_rounding_m = 0.0;
+    double horizontal_spiral_length_rounding_m = 0.0;
+    bool equalize_horizontal_spiral_lengths = false;
 };
 
 struct ReconstructionResult {
@@ -121,6 +137,7 @@ struct ReconstructionResult {
     std::vector<HorizontalControlPoint> horizontal;
     std::vector<VerticalControlPoint> vertical;
     std::vector<double> projected_stations_m;
+    std::vector<HorizontalCurvatureSample> curvature_graph;
     std::vector<Diagnostic> diagnostics;
 
     bool ok() const noexcept {

@@ -10,6 +10,8 @@ using namespace alignment_reconstruct;
 
 static_assert(std::is_standard_layout<Point2D>::value, "Point2D must be standard-layout");
 static_assert(std::is_standard_layout<Point3D>::value, "Point3D must be standard-layout");
+static_assert(std::is_standard_layout<HorizontalCurvatureSample>::value,
+              "HorizontalCurvatureSample must be standard-layout");
 static_assert(std::is_standard_layout<HorizontalControlPoint>::value,
               "HorizontalControlPoint must be standard-layout");
 static_assert(std::is_standard_layout<VerticalControlPoint>::value,
@@ -35,6 +37,17 @@ AR_TEST(vertical_control_point_carries_station_elevation_and_radius) {
     AR_EXPECT_NEAR(point.vertical_curve_radius_m, 10000.0, 0.0);
 }
 
+AR_TEST(horizontal_curvature_sample_uses_the_public_line_curve_values) {
+    AR_EXPECT(static_cast<int>(HorizontalSampleProperty::straight) == 0);
+    AR_EXPECT(static_cast<int>(HorizontalSampleProperty::curve) == 1);
+
+    HorizontalCurvatureSample sample;
+    sample.curvature_inverse_m = -0.00125;
+    sample.property = HorizontalSampleProperty::curve;
+    AR_EXPECT_NEAR(sample.curvature_inverse_m, -0.00125, 0.0);
+    AR_EXPECT(sample.property == HorizontalSampleProperty::curve);
+}
+
 AR_TEST(result_status_is_the_only_success_owner) {
     ReconstructionResult reconstruction;
     PointCloudFitResult point_cloud_fit;
@@ -55,11 +68,14 @@ AR_TEST(default_options_preserve_confirmed_horizontal_thresholds) {
     const ReconstructionOptions options;
     AR_EXPECT_NEAR(options.start_station_m, 0.0, 0.0);
     AR_EXPECT_NEAR(options.curvature_window_m, 15.0, 0.0);
-    AR_EXPECT_NEAR(options.curvature_threshold_inverse_m, 0.00008, 0.0);
+    AR_EXPECT_NEAR(options.curvature_threshold_inverse_m, 0.001, 0.0);
     AR_EXPECT(options.minimum_curve_sample_count == 3);
     AR_EXPECT(options.maximum_spiral_classification_iterations == 300);
     AR_EXPECT_NEAR(options.horizontal_optimization_tolerance, 1.0e-4, 0.0);
     AR_EXPECT(options.horizontal_optimization_max_iterations == 10);
+    AR_EXPECT_NEAR(options.horizontal_curve_radius_rounding_m, 0.0, 0.0);
+    AR_EXPECT_NEAR(options.horizontal_spiral_length_rounding_m, 0.0, 0.0);
+    AR_EXPECT(!options.equalize_horizontal_spiral_lengths);
 }
 
 AR_TEST(default_options_preserve_the_rebuild_dialog_vertical_parameters) {

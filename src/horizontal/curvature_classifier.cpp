@@ -38,6 +38,21 @@ std::vector<ClassificationRun> form_runs(const std::vector<bool>& curved) {
     return runs;
 }
 
+void capture_line_curve_graph(
+    HorizontalSampleAnalysis& analysis,
+    const std::vector<int>& property) {
+    analysis.curvature_graph.clear();
+    analysis.curvature_graph.reserve(property.size());
+    for (std::size_t index = 0; index < property.size(); ++index) {
+        analysis.curvature_graph.push_back({
+            analysis.curvature_inverse_m[index],
+            property[index] == 0
+                ? HorizontalSampleProperty::straight
+                : HorizontalSampleProperty::curve
+        });
+    }
+}
+
 void finalize_legacy_analysis(
     HorizontalSampleAnalysis& analysis,
     const std::vector<int>& property,
@@ -1005,7 +1020,8 @@ double three_point_tangent(
 
 HorizontalSampleAnalysis classify_horizontal_samples(
     const std::vector<Point2D>& ordered_points,
-    const ReconstructionOptions& options) {
+    const ReconstructionOptions& options,
+    const std::vector<HorizontalCurvatureSample>& curvature_graph) {
     if (ordered_points.size() < 2) {
         throw std::invalid_argument("At least two ordered horizontal samples are required");
     }
@@ -1029,6 +1045,46 @@ HorizontalSampleAnalysis classify_horizontal_samples(
                 analysis.cumulative_distance_m[index - 1] + segment;
         }
     }
+
+    if (!curvature_graph.empty()) {
+        if (curvature_graph.size() != count) {
+            throw std::invalid_argument(
+                "Provided curvature graph size does not match horizontal samples");
+        }
+        std::vector<int> property;
+        property.reserve(count);
+        for (const HorizontalCurvatureSample& sample : curvature_graph) {
+            analysis.curvature_inverse_m[property.size()] = sample.curvature_inverse_m;
+            property.push_back(
+                sample.property == HorizontalSampleProperty::straight ? 0 : 1);
+        }
+        analysis.curvature_graph = curvature_graph;
+        const std::vector<int> original_property = property;
+        std::vector<LegacyStraightSegment> segments =
+            form_legacy_straight_segments(property);
+        if (property != original_property) {
+            throw std::invalid_argument(
+                "Provided curvature graph has invalid route-end properties");
+        }
+        if (segments.size() < 2) {
+            LegacyStraightSegment& segment = segments.front();
+            segment.following_curve_sample_count = 0;
+            segment.circular_first_index = segment.last_index;
+            segment.circular_last_index = segment.last_index;
+            segment.circular_sample_count = 0;
+            finalize_legacy_analysis(analysis, property, segments);
+            return analysis;
+        }
+        identify_legacy_spiral_samples(
+            ordered_points, analysis.cumulative_distance_m,
+            options, property, segments);
+        swing_legacy_spiral_samples(
+            ordered_points, analysis.cumulative_distance_m,
+            property, segments);
+        finalize_legacy_analysis(analysis, property, segments);
+        return analysis;
+    }
+
     if (count < 4 ||
         analysis.cumulative_distance_m.back() <= 2.0 * options.curvature_window_m) {
         const double route_heading = heading(ordered_points.front(), ordered_points.back());
@@ -1037,6 +1093,7 @@ HorizontalSampleAnalysis classify_horizontal_samples(
         analysis.sample_kind.assign(count, HorizontalSampleKind::straight);
         analysis.straight_segments.push_back({0, count - 1, 0, count - 1, count - 1, 0});
         analysis.runs = {{false, 0, count - 1}};
+        capture_line_curve_graph(analysis, std::vector<int>(count, 0));
         return analysis;
     }
 
@@ -1138,12 +1195,10 @@ HorizontalSampleAnalysis classify_horizontal_samples(
         segment.circular_first_index = segment.last_index;
         segment.circular_last_index = segment.last_index;
         segment.circular_sample_count = 0;
+        capture_line_curve_graph(analysis, property);
         finalize_legacy_analysis(analysis, property, segments);
         return analysis;
     }
-    dynamically_adjust_line_curve_properties(
-        ordered_points, analysis.tangent_heading_rad,
-        analysis.curvature_inverse_m, 5, property, segments);
     split_reverse_curves(
         analysis.curvature_inverse_m, property, segments);
     remove_short_curve_ranges(
@@ -1157,9 +1212,11 @@ HorizontalSampleAnalysis classify_horizontal_samples(
         segment.circular_first_index = segment.last_index;
         segment.circular_last_index = segment.last_index;
         segment.circular_sample_count = 0;
+        capture_line_curve_graph(analysis, property);
         finalize_legacy_analysis(analysis, property, segments);
         return analysis;
     }
+    capture_line_curve_graph(analysis, property);
     identify_legacy_spiral_samples(
         ordered_points, analysis.cumulative_distance_m,
         options, property, segments);

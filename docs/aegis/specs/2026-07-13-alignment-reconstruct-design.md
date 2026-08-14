@@ -1,7 +1,7 @@
 # AlignmentReconstruct 完整设计规格
 
 日期：`2026-07-13`  
-状态：`已实现；2026-07-16 平面活跃路径完成毫米级对齐；2026-07-27 纵面重构按 CRebuildDlg → CReBuildGMX 真实运行链完成小数点后对齐；2026-07-31 增加点云中心线拟合采样入口；2026-08-01 改为三入口 DLL`
+状态：`已实现；2026-07-16 平面活跃路径完成毫米级对齐；2026-07-27 纵面重构按 CRebuildDlg → CReBuildGMX 真实运行链完成小数点后对齐；2026-07-31 增加点云中心线拟合采样入口；2026-08-01 改为三入口 DLL；2026-08-12 增加平面半径/缓长取整和前后等缓长选项；2026-08-13 增加逐点直曲曲率图输出与回灌；2026-08-14 平面初始曲率阈值改为 `0.001 1/m` 并移除 × 5 动态调整调用`
 架构审查：`需要`
 
 ## 1. 目标
@@ -20,7 +20,8 @@
 实现 Agent 必须以当前项目中的实际调用链和活跃函数为行为依据，不能只根据类型名或界面文字猜测算法：
 
 - “全线坐标拟合”对话框的平面流程由两个按钮组成：`CQXBoLiangCalDlg::OnBnClickedButtonZdfd` 先完成直曲自动分段，`CQXBoLiangCalDlg::OnBnClickedButtonNhht` 再执行 `FormLineSeg` → `IDSpiral` → `SwingAlgorithm` → `AllQXNH2`，这是平面重构的 A 级入口。
-- `OnBnClickedButtonZdfd` 的活跃数值顺序是 `Sort` → `JMSurPtLC` → `CalCurvature` → `MarkProperty` → `IDdentifyLineOrCurve` → `Dynamic_Adjust_Property_SetAdjust(5)` → `DealFanxiangQX` → `CalFJD` → `CheckCurve` → `Checkline` → `Dynamic_Adjust_Property_SetAdjust(6)`；其中 `Checkline` 当前为空函数。
+- `AllQXNH2` 活跃路径先执行 `(l1, R, l2)` 三变量优化，再按需把前后缓长设为优化值的算术平均，最后分别取整半径、前缓长和后缓长。参考 `Digit` 只在余数严格大于半步时进位，恰好半步不进位。
+- 当前迁移后的自动分类顺序是 `Sort` → `JMSurPtLC` → `CalCurvature` → `MarkProperty` → `IDdentifyLineOrCurve` → `DealFanxiangQX` → `CalFJD` → `CheckCurve` → `Checkline` → `Dynamic_Adjust_Property_SetAdjust(6)`；其中 `Checkline` 当前为空函数。旧入口中的 `Dynamic_Adjust_Property_SetAdjust(5)` 不再调用，但动态调整函数实现和最终 × 6 调用保留。
 - `RHA::CalRectification` 先将测点 XY 投影到平面线路，得到投影里程、投影点和带符号拨量：`RHA.cpp:26041-26188`。
 - `ZDMSJ.cpp:10961-10968` 使用同一投影里程调用纵断面计算，形成拨量与抬落道量的联合结果。
 - `CDrawSlope::CalTLDL` 按 `设计高程 - 实测高程` 计算抬落道量，正值为抬道、负值为落道，并在旧界面链路中换算为毫米：`DrawSlope.cpp:6339-6367`。
@@ -43,7 +44,7 @@
 | 目的 | 必读代码 | Agent 应提取的行为 | 不应带入新库的内容 |
 | --- | --- | --- | --- |
 | 平面直曲自动分段入口 | `QXBoLiangCalDlg.cpp:70-157`，`CQXBoLiangCalDlg::OnBnClickedButtonZdfd` | 按活跃顺序读取/整理测点、累计距离、计算曲率、直曲稳定化、反向曲线处理和短曲线检查 | 文件读取、Excel 回写、绘图、进度条、消息框 |
-| 平面线位生成入口 | `QXBoLiangCalDlg.cpp:159-258`，`CQXBoLiangCalDlg::OnBnClickedButtonNhht` | 依据当前 `SelSurPt.Propert` 重建直线段；有曲线时执行 `IDSpiral` 和 `SwingAlgorithm`，最后无条件执行 `AllQXNH2` 输出方案 | 对话框选项、CAD 文档锁、实体创建和显示 |
+| 平面线位生成入口 | `QXBoLiangCalDlg.cpp:159-258`，`CQXBoLiangCalDlg::OnBnClickedButtonNhht` | 依据当前 `SelSurPt.Propert` 重建直线段；有曲线时执行 `IDSpiral` 和 `SwingAlgorithm`，最后无条件执行 `AllQXNH2` 输出方案；半径/缓长取整和等缓长通过纯数值 options 承载 | MFC 控件、中文下拉文字、CAD 文档锁、实体创建和显示 |
 | 三维测点及联合结果字段 | `Struct.h:508-561`，`SSurPt` | N/E、投影里程、拨量、实测高程、设计高程、抬落道量之间的关系 | `CString`、线路名、现场里程冠号、界面限制字段 |
 | 平面交点输出 | `Struct.h:678-732`，`JDarrayStruct` | 交点 N/E、`R`、`l1`、`l2`；起终点半径和缓长为零 | MDB/绘图/改建属性及字符串字段 |
 | 平面线元里程 | `Struct.h:563-675`，`QXBStruct`/`QXBCmlStruct` | ZH/HY/YH/HZ 里程、转角、切线长、曲线长、左右转 | 现场里程字符串和图形字段 |
@@ -55,14 +56,14 @@
 | 阶段 | 必读代码 | Agent 实现指引 |
 | --- | --- | --- |
 | 点序与累计距离 | `QXBoLiangCalDlg.cpp:70-157` → `CeDianNiHe.cpp:848-963`：`Sort`、`JMSurPtLC` | 旧界面会整理点序；公共契约要求调用方按线路方向给点，因此新库保留顺序、重复点和累计距离校验，不复制文件/UI 自动寻路 |
-| 曲率和初始属性 | `CeDianNiHe.cpp:964-1226`：`CalCurvature`、`GetCirByThreePointOnArc`、`MarkProperty` | 保留 15 m 前后搜索、三点切向/圆心状态、曲率和 `0.00008 1/m` 初始阈值的计算顺序 |
-| 直曲稳定化总顺序 | `QXBoLiangCalDlg.cpp:117-143`；`CeDianNiHe.cpp:1310-1838` | 严格按 `IDdentifyLineOrCurve` → 动态阈值 5 → `DealFanxiangQX` → `CalFJD` → `CheckCurve` → 空的 `Checkline` → 动态阈值 6 执行；不要调用同名 `New` 或注释分支 |
+| 曲率和初始属性 | `CeDianNiHe.cpp:964-1226`：`CalCurvature`、`GetCirByThreePointOnArc`、`MarkProperty` | 保留 15 m 前后搜索、三点切向/圆心状态和曲率计算顺序；公共初始阈值默认值为 `0.001 1/m` |
+| 直曲稳定化总顺序 | `QXBoLiangCalDlg.cpp:117-143`；`CeDianNiHe.cpp:1310-1838` | 当前 owner 按 `IDdentifyLineOrCurve` → `DealFanxiangQX` → `CalFJD` → `CheckCurve` → 空的 `Checkline` → 动态阈值 6 执行；不调用动态阈值 5，也不调用同名 `New` 或注释分支 |
 | 直线段、拟合和交点有效性 | `CeDianNiHe.cpp:1373-1520`、`:2279-2431`：`FormLineSeg`、`IsIntersectionBetween`、`FitLine`、`FootPoint` | 保留连续区段形成、端点强制直线、相邻直线延长线判定和旧正交拟合的运算顺序；数组越界只做等价安全化，不改变有效输入结果 |
 | 反向曲线和短曲线 | `CeDianNiHe.cpp:1591-1731`：`CheckCurve`、`CalFJD`、`DealFanxiangQX` | 保留曲率符号反转时的 `0.0008 1/m` 再分类，以及长度小于 20 m 曲线段的处理 |
 | 缓和三态识别 | `QXBoLiangCalDlg.cpp:229-251` → `CeDianNiHe.cpp:2451-2882`：`IDSpiral`、`FormLineSeg2`、`AtLeastOneCurvPt`、`AtLeastOneLinePt` | 仅在 `CurvNum > 0` 时执行；保留 `Propert = 0/1/2` 的直线/圆/缓和边界调整、点数约束和 300 次活跃上限 |
 | 缓和边界摆动 | `CeDianNiHe.cpp:4692-4917`：`SwingAlgorithm` | `IDSpiral` 后继续用当前圆拟合、交点、初始缓长和线路投影反复重分三态，保留 500 次上限 |
 | 圆拟合、交点和初始缓长 | `CeDianNiHe.cpp:3504-3789`：`YNH2`、`CalJDZB`、`CalL0`、`CalL02` | 保留圆心先直接除以样本数再累积正规方程的浮点运算顺序、相邻拟合直线交点以及两端不等长缓和估计 |
-| 全线输出与优化 | `CeDianNiHe.cpp:2974-3283`、`:3792-4278`：`AllQXNH2`、`YouHuaBL`、`CalBL`、`powell`、`linmin`、`mnbrak`、`brent` | 形成起点、中间交点、终点并输出 N/E、R、l1、l2；`AllQXNH2` 当前无条件调用 `YouHuaBL`，变量顺序固定为 `(l1, R, l2)`，目标覆盖 `SNO .. 下一直线 ENO`，Powell 容差 `1e-4`、最多 10 次，`mnbrak` 最多 10 次；默认不等缓长且不取整 |
+| 全线输出与优化 | `CeDianNiHe.cpp:2974-3283`、`:3792-4278`：`AllQXNH2`、`YouHuaBL`、`CalBL`、`powell`、`linmin`、`mnbrak`、`brent`；`BAS_CALC_FUN.cpp:10166-10180`：`Digit` | 形成起点、中间交点、终点并输出 N/E、R、l1、l2；`AllQXNH2` 当前无条件调用 `YouHuaBL`，变量顺序固定为 `(l1, R, l2)`，目标覆盖 `SNO .. 下一直线 ENO`，Powell 容差 `1e-4`、最多 10 次，`mnbrak` 最多 10 次；优化后再按“算术平均 → R 取整 → l1/l2 分别取整”处理，`Digit` 的恰好半步不进位；默认不等缓长且不取整 |
 | 曲线点少于 3 个 | `CeDianNiHe.cpp:3038-3106`：`AllQXNH2` 内的 `BCTTP`/`BCTPP` 活跃分支 | 这是稀疏曲线样本的可达分支；若迁移该边界，必须继续读取 `BCTTP`/`BCTPP` 的活跃纯数学逻辑并建立专门对照测试，不能用任意圆拟合替代 |
 | 方案转 typed 线路 | `AllQXNH2` 中 `m_SJD`/`pRHA_Opti` 数据流；`RHA.cpp:3348-4003` | 只提取“交点结果可构造并被 `CalBL` 投影评价”的数值行为；不创建 `RHA`、CAD 实体或十列裸数组 owner |
 
@@ -220,6 +221,16 @@ enum class HorizontalElementKind {
     exit_spiral
 };
 
+enum class HorizontalSampleProperty {
+    straight = 0,
+    curve = 1
+};
+
+struct HorizontalCurvatureSample {
+    double curvature_inverse_m;
+    HorizontalSampleProperty property;
+};
+
 struct HorizontalControlPoint {
     HorizontalControlPointKind kind;
     Point2D position;
@@ -277,7 +288,8 @@ struct PointAdjustment {
 ```cpp
 ReconstructionResult reconstruct(
     const std::vector<Point3D>& ordered_points,
-    const ReconstructionOptions& options = {});
+    const ReconstructionOptions& options = {},
+    const std::vector<HorizontalCurvatureSample>& curvature_graph = {});
 ```
 
 输出：
@@ -287,9 +299,24 @@ ReconstructionResult reconstruct(
 - 有序纵断面控制点：起点、各变坡点、终点；
 - 每个纵断面控制点的里程、高程和竖曲线半径；
 - 各输入点投影到重构平面线路后的里程；
+- 与输入逐点对应、实际送入后续平面拟合的带符号曲率和 `0/1` 直曲属性图；
 - 状态和诊断信息。
 
-`ReconstructionOptions` 显式承载旧工程原先来自界面、规范对象或全局变量的阈值与限制，包括平面直曲分段阈值、拟合/优化控制、纵面二阶差商阈值候选、最小坡长、坡度限制、坡度代数差限制、竖曲线最小半径、半径取整粒度、起始里程和里程单调容差。
+第三参数为空表示执行完整自动直曲分段。非空时必须与测点一一对应，并作为
+`OnBnClickedButtonZdfd` 完成后的直曲分段结果使用：跳过自动曲率、阈值分类和直曲稳定化，
+从 `FormLineSeg` 继续进入 `IDSpiral`、`SwingAlgorithm` 和 `AllQXNH2`。公开属性仅有
+`straight(0)` 与 `curve(1)`；`IDSpiral` 之后内部出现的 `0/1/2` 直线/圆/缓和三态不泄漏为
+曲率图契约。自动返回图可以原样回灌并得到同等平面、投影 station 和纵面结果。
+
+`ReconstructionOptions` 显式承载旧工程原先来自界面、规范对象或全局变量的阈值与限制，包括平面直曲分段阈值、拟合/优化控制、平面半径取整步长、平面缓长取整步长、前后等缓长开关、纵面二阶差商阈值候选、最小坡长、坡度限制、坡度代数差限制、竖曲线最小半径、纵面半径取整粒度、起始里程和里程单调容差。两个平面取整步长的默认值为 `0.0 m`，等缓长默认为 `false`，以保持旧的默认数值路径。
+
+新字段为 `horizontal_curve_radius_rounding_m`、
+`horizontal_spiral_length_rounding_m` 和 `equalize_horizontal_spiral_lengths`。前两者接受任意有限
+非负米制步长；参考 UI 的标准映射分别是 `0/1/10/50/100 m` 和 `0/1/5/10 m`。
+这些字段追加在结构体末尾，但仍改变 C++ 结构体布局；调用方必须使用新头文件重新编译，
+并使用同版本导入库和 DLL。
+
+平面初始直/曲分类阈值默认值为 `0.001 1/m`。自动分类稳定化后不再执行直线点平均曲率 × 5 动态调整，只在反向曲线和短曲线处理后保留最终 × 6 调整。
 
 默认值只代表独立几何重构的推荐配置。凡声称与旧行为一致的测试，必须显式填写所有影响结果的选项。
 
@@ -331,11 +358,13 @@ PointCloudFitResult fit_point_cloud(
 唯一负责：
 
 - 平面累计距离、切向和曲率计算；
-- 直曲自动分段及稳定化；
+- 直曲自动分段及稳定化，并在缓和三态识别前形成公共 `0/1` 曲率图；
+- 校验后的调用方曲率图从同一 `FormLineSeg` 边界续接，不建立第二套拟合 owner；
 - 直线正交最小二乘拟合；
 - 圆曲线拟合和相邻切线交点；
 - 进出口缓和曲线长估计；
 - 半径和缓长的旧目标函数优化；
+- 优化后的前后等缓长、半径取整和缓长取整；
 - 平面几何可行性检查。
 
 ### 8.2 `VerticalReconstructor`
@@ -373,13 +402,14 @@ PointCloudFitResult fit_point_cloud(
 
 1. 校验有限数值、点数和连续重复点。
 2. 按输入顺序建立临时累计距离。
-3. 按旧工程对应行为计算切向与曲率。
-4. 识别并稳定直线段与曲线段。
-5. 拟合直线、圆曲线和缓和曲线参数。
+3. 未提供曲率图时，按旧工程对应行为计算切向与曲率，识别并稳定直线段与曲线段；提供图时跳过本步。
+4. 固定本次实际使用的逐点 `0/1` 直曲曲率图；自动路径返回计算图，提供路径原样保留输入图。
+5. 从图中形成直线段，再识别内部直线/圆曲线/缓和曲线三态并拟合参数。
 6. 计算切线交点及左右转向。
 7. 用抽取的旧目标函数优化半径和进出口缓长。
-8. 验证相邻曲线不重叠且各线元长度有效。
-9. 输出平面控制点。
+8. 按 options 先将优化后的前后缓长设为算术平均，再分别取整半径和两个缓长。
+9. 验证处理后的相邻曲线不重叠且各线元长度有效。
+10. 输出平面控制点，并用这套最终线路产生投影 station 和纵面样本。
 
 ### 9.2 纵断面
 
@@ -415,6 +445,8 @@ PointCloudFitResult fit_point_cloud(
 
 - 重构点数不足；
 - 坐标、方案参数或选项不是有限数；
+- 平面半径或缓长取整步长为负数；
+- 非空曲率图数量与测点不一致、曲率非有限、属性枚举非法或分段形状无法形成有效直线/曲线段；
 - 连续平面点重合；
 - 重构后的投影里程反向超过容差；
 - 平面控制点少于两个；
@@ -444,6 +476,10 @@ PointCloudFitResult fit_point_cloud(
 - 平曲线与竖曲线同时存在时，同一投影里程驱动两项调整量；
 - 线路端点外投影；
 - 米与毫米换算；
+- 平面半径/缓长标准取整步长、恰好半步不进位、前后等缓长以及“先平均后取整”顺序；
+- 取整后几何不可行时明确失败，且返回平面、投影 station 与纵面样本共用同一已整饰线路；
+- 自动输出逐点曲率图、自动图原样回灌结果等价、提供图时曲率阈值/窗口不再参与分类；
+- 曲率图数量、有限值、枚举和端部/连续区段形状的稳定诊断；
 - 第 11 节各类校验错误。
 - 点云输入行序不变性、中心线拟合、XY 弧长采样、端点策略和 Python 数值参考。
 
@@ -486,7 +522,7 @@ PointCloudFitResult fit_point_cloud(
 
 ## 13. 兼容和范围边界
 
-- 旧 ObjectARX 工程只作为行为证据，本目标不修改、删除或重定向旧代码。
+- 旧 ObjectARX 工程只作为行为证据，本目标不修改、删除或重定向旧代码；MFC 控件和字符串不进入新库，其已确认的纯数值重构语义通过 `ReconstructionOptions` 承载。
 - 新库不追求旧二进制 ABI、自定义实体、DWG、MDB 或界面兼容。
 - 不处理回头、自交、分岔或非 X 单值点云的通用自动寻路。
 - 不绘制 CAD 实体，不注册命令，不读写数据库或 Excel。

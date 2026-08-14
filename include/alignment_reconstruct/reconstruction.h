@@ -7,6 +7,7 @@ namespace alignment_reconstruct {
 
 ALIGNMENT_RECONSTRUCT_API ReconstructionResult reconstruct(
     const std::vector<Point3D>& ordered_points,
-    const ReconstructionOptions& options = {});
+    const ReconstructionOptions& options = {},
+    const std::vector<HorizontalCurvatureSample>& curvature_graph = {});
 
 } // namespace alignment_reconstruct

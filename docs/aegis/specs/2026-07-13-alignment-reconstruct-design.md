@@ -309,6 +309,7 @@ ReconstructionResult reconstruct(
 曲率图契约。自动返回图可以原样回灌并得到同等平面、投影 station 和纵面结果。
 
 `ReconstructionOptions` 显式承载旧工程原先来自界面、规范对象或全局变量的阈值与限制，包括平面直曲分段阈值、拟合/优化控制、平面半径取整步长、平面缓长取整步长、前后等缓长开关、纵面二阶差商阈值候选、最小坡长、坡度限制、坡度代数差限制、竖曲线最小半径、纵面半径取整粒度、起始里程和里程单调容差。两个平面取整步长的默认值为 `0.0 m`，等缓长默认为 `false`，以保持旧的默认数值路径。
+主控的一个 `ShuTiaoJ` 业务值同时支配最大坡差整饰和竖曲线启用判定；公共选项虽保留两个字段，两者默认均为 `1000‰`，调用方只有在明确需要更严的规范约束时才分别覆盖。
 
 新字段为 `horizontal_curve_radius_rounding_m`、
 `horizontal_spiral_length_rounding_m` 和 `equalize_horizontal_spiral_lengths`。前两者接受任意有限

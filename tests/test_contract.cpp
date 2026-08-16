@@ -84,12 +84,15 @@ AR_TEST(default_options_preserve_the_rebuild_dialog_vertical_parameters) {
     AR_EXPECT(
         options.vertical_second_difference_threshold_candidates == expected);
     AR_EXPECT_NEAR(options.minimum_grade_length_m, 350.0, 0.0);
-    AR_EXPECT_NEAR(options.maximum_up_grade, 25.0, 0.0);
-    AR_EXPECT_NEAR(options.maximum_down_grade, 25.0, 0.0);
-    AR_EXPECT_NEAR(options.maximum_grade_difference_per_mille, 7.0, 0.0);
+    AR_EXPECT_NEAR(options.maximum_up_grade, 1000.0, 0.0);
+    AR_EXPECT_NEAR(options.maximum_down_grade, 1000.0, 0.0);
+    AR_EXPECT_NEAR(
+        options.maximum_grade_difference_per_mille,
+        1000.0,
+        0.0);
     AR_EXPECT_NEAR(
         options.minimum_vertical_curve_grade_difference_per_mille,
-        3.0,
+        1000.0,
         0.0);
     AR_EXPECT_NEAR(options.minimum_vertical_curve_radius_m, 10000.0, 0.0);
     AR_EXPECT_NEAR(options.maximum_vertical_curve_radius_m, 30000.0, 0.0);

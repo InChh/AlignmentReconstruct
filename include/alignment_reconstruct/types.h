@@ -117,10 +117,10 @@ struct ReconstructionOptions {
         0.001
     };
     double minimum_grade_length_m = 350.0;
-    double maximum_up_grade = 25.0;
-    double maximum_down_grade = 25.0;
-    double maximum_grade_difference_per_mille = 7.0;
-    double minimum_vertical_curve_grade_difference_per_mille = 3.0;
+    double maximum_up_grade = 1000.0;
+    double maximum_down_grade = 1000.0;
+    double maximum_grade_difference_per_mille = 1000.0;
+    double minimum_vertical_curve_grade_difference_per_mille = 1000.0;
     double minimum_vertical_curve_radius_m = 10000.0;
     double maximum_vertical_curve_radius_m = 30000.0;
     double vertical_curve_radius_rounding_m = 100.0;

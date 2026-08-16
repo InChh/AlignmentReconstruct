@@ -492,10 +492,10 @@ const AdjustmentCalculationResult changed =
 | `equalize_horizontal_spiral_lengths` | `false` | 是否在优化后把每个交点的进、出口缓长设为二者算术平均值 |
 | `vertical_second_difference_threshold_candidates` | `{0.001}` | 纵面二阶差商阈值。单元素表示固定阈值；传入多个候选时，库逐一完成重构并按参考项目的厘米级抬落道平方和选优 |
 | `minimum_grade_length_m` | `350` | 小于该长度的短坡段会参与合并，m；0 表示不按长度合并 |
-| `maximum_up_grade` | `25` | 最大上坡坡度，‰；0 表示不限制 |
-| `maximum_down_grade` | `25` | 最大下坡坡度绝对值，‰；0 表示不限制 |
-| `maximum_grade_difference_per_mille` | `7` | 相邻坡段最大坡差，‰；0 表示不限制 |
-| `minimum_vertical_curve_grade_difference_per_mille` | `3` | 设置竖曲线的最小坡度代数差，‰；0 表示所有非零坡差均参与半径拟合 |
+| `maximum_up_grade` | `1000` | 最大上坡坡度，‰；0 表示不限制 |
+| `maximum_down_grade` | `1000` | 最大下坡坡度绝对值，‰；0 表示不限制 |
+| `maximum_grade_difference_per_mille` | `1000` | 相邻坡段最大坡差，‰；0 表示不限制。默认值与主控的 `ShuTiaoJ` 兼容值一致 |
+| `minimum_vertical_curve_grade_difference_per_mille` | `1000` | 设置竖曲线的最小坡度代数差，‰；0 表示所有非零坡差均参与半径拟合。主控使用同一 `ShuTiaoJ` 值控制本阶段 |
 | `minimum_vertical_curve_radius_m` | `10000` | 竖曲线拟合初值和下限，m |
 | `maximum_vertical_curve_radius_m` | `30000` | 竖曲线拟合上限，m；参考项目活跃算法的硬上限为 30000，不允许设置得更大 |
 | `vertical_curve_radius_rounding_m` | `100` | 竖曲线半径向下归整步长，m；0 表示不归整 |

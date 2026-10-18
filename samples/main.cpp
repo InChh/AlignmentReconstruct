@@ -20,9 +20,17 @@ int main() {
         const double x = station * direction_x;
         const double y = station * direction_y;
         const double z = 100.0 + 0.005 * station;
-        unordered_point_cloud.push_back({x, y - 0.4, z - 0.2});
+        unordered_point_cloud.push_back({
+            x + 0.4 * direction_y,
+            y - 0.4 * direction_x,
+            z - 0.2
+        });
         unordered_point_cloud.push_back({x, y, z});
-        unordered_point_cloud.push_back({x, y + 0.4, z + 0.2});
+        unordered_point_cloud.push_back({
+            x - 0.4 * direction_y,
+            y + 0.4 * direction_x,
+            z + 0.2
+        });
     }
     std::reverse(unordered_point_cloud.begin(), unordered_point_cloud.end());
 

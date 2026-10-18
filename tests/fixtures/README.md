@@ -10,6 +10,15 @@
 
 三份文件全部存在时，现场回归测试自动运行；全部缺失时相关测试明确显示 `[SKIP]`；只存在部分文件时测试失败，以避免误用不完整基线。公开克隆不需要这些文件即可构建并运行其余确定性测试。
 
+## 稀疏无宽度与带宽度点云对照
+
+`point_cloud_fit_handles_the_optional_sparse_and_wide_reference_pair` 通过两个环境变量读取私有米制 CSV；均无表头，每行三列 `x,y,z`：
+
+- `ALIGNMENT_RECONSTRUCT_EXTERNAL_SPARSE_CENTERLINE_CSV`：按线路方向排列的无宽度中心线参考。
+- `ALIGNMENT_RECONSTRUCT_EXTERNAL_WIDE_CLOUD_CSV`：相同线路范围的带宽度散点，行序不限。
+
+测试对两组数据分别调用 `fit_point_cloud(..., 5.0)`，核查反转行序后逐坐标完全一致，并以无宽度参考折线比较平面最大差 / RMS 和同位置高程最大差 / RMS。当前门槛用于本次私有数据回归，不是通用工程验收标准；具体数值与本轮证据见 `docs/verification/2026-10-18-point-cloud-sparse-and-wide.md`。未提供任一变量时明确跳过，原始数据和转换后的 CSV 保持忽略，不提交。
+
 ## 坐标和单位映射
 
 - 公共 `x` = 旧数据 `N` / `纬距`。

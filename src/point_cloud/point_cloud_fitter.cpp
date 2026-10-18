@@ -15,14 +15,18 @@ namespace alignment_reconstruct::detail {
 namespace {
 
 constexpr double bin_width_m = 1.0;
+constexpr long double bin_boundary_tolerance = 1.0e-12L;
 constexpr double plan_half_window_m = 12.0;
 constexpr double height_half_window_m = 6.0;
 constexpr std::size_t robust_iterations = 3;
 constexpr std::size_t minimum_anchor_count = 20;
 constexpr std::size_t minimum_points_per_bin = 3;
+constexpr std::size_t minimum_fit_anchor_count = 3;
 constexpr std::size_t local_minimum_neighbors = 9;
 constexpr std::size_t maximum_output_point_count = 10'000'000;
 constexpr double endpoint_remainder_tolerance_m = 0.01;
+constexpr long double minimum_plan_variance_ratio = 4.0L;
+constexpr double axis_snap_sine = 0.10452846326765347; // sin(6 degrees)
 
 struct LocalPointCloud {
     Point3D origin;
@@ -38,6 +42,23 @@ struct RobustFit {
     std::vector<double> fitted;
     std::vector<double> robust_weights;
 };
+
+struct PlanBasis {
+    double longitudinal_x = 1.0;
+    double longitudinal_y = 0.0;
+    double transverse_x = 0.0;
+    double transverse_y = 1.0;
+};
+
+bool point_less(const Point3D& left, const Point3D& right) {
+    if (left.x != right.x) {
+        return left.x < right.x;
+    }
+    if (left.y != right.y) {
+        return left.y < right.y;
+    }
+    return left.z < right.z;
+}
 
 [[noreturn]] void fail(
     StatusCode status,
@@ -113,10 +134,150 @@ LocalPointCloud center_points(const std::vector<Point3D>& points) {
     return local;
 }
 
-long long bin_identifier(double x, double minimum_x) {
-    const long double raw_identifier = std::floor(
+PlanBasis estimate_plan_basis(const std::vector<Point3D>& points) {
+    std::vector<Point3D> ordered = points;
+    std::sort(
+        ordered.begin(),
+        ordered.end(),
+        point_less);
+
+    long double mean_x = 0.0L;
+    long double mean_y = 0.0L;
+    for (const Point3D& point : ordered) {
+        mean_x += static_cast<long double>(point.x);
+        mean_y += static_cast<long double>(point.y);
+    }
+    const long double point_count =
+        static_cast<long double>(ordered.size());
+    mean_x /= point_count;
+    mean_y /= point_count;
+
+    long double sum_xx = 0.0L;
+    long double sum_xy = 0.0L;
+    long double sum_yy = 0.0L;
+    for (const Point3D& point : ordered) {
+        const long double x =
+            static_cast<long double>(point.x) - mean_x;
+        const long double y =
+            static_cast<long double>(point.y) - mean_y;
+        sum_xx += x * x;
+        sum_xy += x * y;
+        sum_yy += y * y;
+    }
+    if (!std::isfinite(sum_xx) ||
+        !std::isfinite(sum_xy) ||
+        !std::isfinite(sum_yy)) {
+        fail(
+            StatusCode::numerical_failure,
+            DiagnosticCode::degenerate_fit,
+            "Point-cloud plan-direction covariance is not finite");
+    }
+
+    const long double trace = sum_xx + sum_yy;
+    const long double difference = sum_xx - sum_yy;
+    const long double discriminant =
+        std::hypot(difference, 2.0L * sum_xy);
+    const long double major_variance =
+        (trace + discriminant) * 0.5L;
+    const long double minor_variance = std::max(
+        0.0L, (trace - discriminant) * 0.5L);
+    if (!std::isfinite(major_variance) ||
+        !std::isfinite(minor_variance) ||
+        major_variance <= 0.0L ||
+        major_variance < minimum_plan_variance_ratio * minor_variance) {
+        fail(
+            StatusCode::invalid_input,
+            DiagnosticCode::insufficient_spatial_support,
+            "Point cloud does not have a stable plan direction");
+    }
+
+    const long double angle =
+        0.5L * std::atan2(2.0L * sum_xy, difference);
+    double longitudinal_x = static_cast<double>(std::cos(angle));
+    double longitudinal_y = static_cast<double>(std::sin(angle));
+    bool x_dominant =
+        std::abs(longitudinal_x) >= std::abs(longitudinal_y);
+    if ((x_dominant && longitudinal_x < 0.0) ||
+        (!x_dominant && longitudinal_y < 0.0)) {
+        longitudinal_x = -longitudinal_x;
+        longitudinal_y = -longitudinal_y;
+    }
+
+    if (x_dominant &&
+        std::abs(longitudinal_y) <= axis_snap_sine) {
+        return {1.0, 0.0, 0.0, 1.0};
+    }
+    if (!x_dominant &&
+        std::abs(longitudinal_x) <= axis_snap_sine) {
+        return {0.0, 1.0, 1.0, 0.0};
+    }
+
+    x_dominant =
+        std::abs(longitudinal_x) >= std::abs(longitudinal_y);
+    if (x_dominant) {
+        return {
+            longitudinal_x,
+            longitudinal_y,
+            -longitudinal_y,
+            longitudinal_x
+        };
+    }
+    return {
+        longitudinal_x,
+        longitudinal_y,
+        longitudinal_y,
+        -longitudinal_x
+    };
+}
+
+std::vector<Point3D> transform_to_plan_basis(
+    const std::vector<Point3D>& points,
+    const PlanBasis& basis) {
+    std::vector<Point3D> transformed;
+    transformed.reserve(points.size());
+    for (const Point3D& point : points) {
+        transformed.push_back({
+            basis.longitudinal_x * point.x +
+                basis.longitudinal_y * point.y,
+            basis.transverse_x * point.x +
+                basis.transverse_y * point.y,
+            point.z
+        });
+    }
+    return transformed;
+}
+
+void transform_from_plan_basis(
+    std::vector<Point3D>& points,
+    const PlanBasis& basis,
+    const Point3D& origin) {
+    for (Point3D& point : points) {
+        const double local_x =
+            basis.longitudinal_x * point.x +
+            basis.transverse_x * point.y;
+        const double local_y =
+            basis.longitudinal_y * point.x +
+            basis.transverse_y * point.y;
+        point.x = local_x + origin.x;
+        point.y = local_y + origin.y;
+        point.z += origin.z;
+        if (!std::isfinite(point.x) ||
+            !std::isfinite(point.y) ||
+            !std::isfinite(point.z)) {
+            fail(
+                StatusCode::numerical_failure,
+                DiagnosticCode::degenerate_fit,
+                "Point-cloud centerline output contains a non-finite coordinate");
+        }
+    }
+}
+
+long long bin_identifier(double x, double minimum_x, double width_m) {
+    const long double normalized =
         (static_cast<long double>(x) - static_cast<long double>(minimum_x)) /
-        static_cast<long double>(bin_width_m));
+        static_cast<long double>(width_m);
+    const long double raw_identifier =
+        std::floor(normalized + bin_boundary_tolerance);
     const long double minimum =
         static_cast<long double>(std::numeric_limits<long long>::min());
     const long double maximum =
@@ -125,12 +286,14 @@ long long bin_identifier(double x, double minimum_x) {
         fail(
             StatusCode::invalid_input,
             DiagnosticCode::insufficient_spatial_support,
-            "Point-cloud X range is too large for one-metre spatial bins");
+            "Point-cloud longitudinal range is too large for spatial bins");
     }
     return static_cast<long long>(raw_identifier);
 }
 
-AnchorSet spatial_bin_medians(const std::vector<Point3D>& points) {
+AnchorSet spatial_bin_anchors(
+    const std::vector<Point3D>& points,
+    bool use_means = false) {
     const auto minimum_iterator = std::min_element(
         points.begin(),
         points.end(),
@@ -138,17 +301,40 @@ AnchorSet spatial_bin_medians(const std::vector<Point3D>& points) {
             return left.x < right.x;
         });
     const double minimum_x = minimum_iterator->x;
+    const auto maximum_iterator = std::max_element(
+        points.begin(), points.end(),
+        [](const Point3D& left, const Point3D& right) { return left.x < right.x; });
+    const double range_m = maximum_iterator->x - minimum_x;
+    const double width_m = range_m > 0.0
+        ? std::min(bin_width_m, range_m / static_cast<double>(minimum_anchor_count))
+        : bin_width_m;
 
     std::map<long long, std::vector<Point3D>> bins;
     for (const auto& point : points) {
-        bins[bin_identifier(point.x, minimum_x)].push_back(point);
+        bins[bin_identifier(point.x, minimum_x, width_m)].push_back(point);
     }
 
     AnchorSet anchors;
     anchors.centers.reserve(bins.size());
     anchors.counts.reserve(bins.size());
     for (const auto& bin : bins) {
-        anchors.centers.push_back(coordinate_median(bin.second));
+        if (use_means) {
+            std::vector<Point3D> ordered = bin.second;
+            std::sort(ordered.begin(), ordered.end(), point_less);
+            long double x = 0.0L;
+            long double y = 0.0L;
+            long double z = 0.0L;
+            for (const auto& point : ordered) {
+                x += point.x;
+                y += point.y;
+                z += point.z;
+            }
+            const long double count = static_cast<long double>(ordered.size());
+            anchors.centers.push_back({static_cast<double>(x / count),
+                static_cast<double>(y / count), static_cast<double>(z / count)});
+        } else {
+            anchors.centers.push_back(coordinate_median(bin.second));
+        }
         anchors.counts.push_back(bin.second.size());
     }
     std::stable_sort(
@@ -221,7 +407,9 @@ double local_polynomial_prediction(
     const std::vector<double>& values,
     double target,
     double half_window_m,
-    const std::vector<double>& robust_weights) {
+    const std::vector<double>& robust_weights,
+    bool adapt_to_support = false,
+    std::size_t adaptive_neighbor_count = minimum_fit_anchor_count) {
     std::vector<double> distances(x.size());
     std::vector<std::size_t> selected;
     selected.reserve(x.size());
@@ -233,7 +421,8 @@ double local_polynomial_prediction(
     }
 
     const std::size_t minimum_neighbors =
-        std::min(local_minimum_neighbors, x.size());
+        std::min(adapt_to_support ? adaptive_neighbor_count : local_minimum_neighbors,
+                 x.size());
     if (selected.size() < minimum_neighbors) {
         selected.resize(x.size());
         std::iota(selected.begin(), selected.end(), std::size_t{0});
@@ -247,6 +436,20 @@ double local_polynomial_prediction(
         std::sort(selected.begin(), selected.end());
     }
 
+    double effective_half_window_m = half_window_m;
+    double coordinate_scale_m = 0.0;
+    if (adapt_to_support) {
+        for (const std::size_t index : selected) {
+            coordinate_scale_m = std::max(coordinate_scale_m, distances[index]);
+            effective_half_window_m = std::max(
+                effective_half_window_m, 1.01 * distances[index]);
+        }
+        if (coordinate_scale_m == 0.0) {
+            fail(StatusCode::invalid_input, DiagnosticCode::insufficient_spatial_support,
+                "Local point-cloud fit needs distinct longitudinal positions");
+        }
+    }
+
     std::vector<double> distance_weights;
     std::vector<double> weights;
     distance_weights.reserve(selected.size());
@@ -254,7 +457,7 @@ double local_polynomial_prediction(
     std::size_t positive_weight_count = 0;
     for (const std::size_t index : selected) {
         const double scaled =
-            std::min(distances[index] / half_window_m, 1.0);
+            std::min(distances[index] / effective_half_window_m, 1.0);
         const double one_minus_cube = 1.0 - scaled * scaled * scaled;
         const double distance_weight =
             one_minus_cube * one_minus_cube * one_minus_cube;
@@ -275,9 +478,12 @@ double local_polynomial_prediction(
          selected_index < selected.size();
          ++selected_index) {
         const std::size_t input_index = selected[selected_index];
-        const long double dx =
+        const long double difference =
             static_cast<long double>(x[input_index]) -
             static_cast<long double>(target);
+        const long double dx = adapt_to_support
+            ? difference / static_cast<long double>(coordinate_scale_m)
+            : difference;
         const std::array<long double, 3> basis{1.0L, dx, dx * dx};
         const long double weight = static_cast<long double>(
             std::max(weights[selected_index], 1.0e-15));
@@ -309,12 +515,15 @@ std::vector<double> local_polynomial_predict(
     const std::vector<double>& values,
     const std::vector<double>& targets,
     double half_window_m,
-    const std::vector<double>& robust_weights) {
+    const std::vector<double>& robust_weights,
+    bool adapt_to_support = false,
+    std::size_t adaptive_neighbor_count = minimum_fit_anchor_count) {
     std::vector<double> predictions;
     predictions.reserve(targets.size());
     for (const double target : targets) {
         predictions.push_back(local_polynomial_prediction(
-            x, values, target, half_window_m, robust_weights));
+            x, values, target, half_window_m, robust_weights, adapt_to_support,
+            adaptive_neighbor_count));
     }
     return predictions;
 }
@@ -322,16 +531,23 @@ std::vector<double> local_polynomial_predict(
 RobustFit robust_local_quadratic(
     const std::vector<double>& x,
     const std::vector<double>& values,
-    double half_window_m) {
+    double half_window_m,
+    bool adapt_to_support = false,
+    std::size_t adaptive_neighbor_count = minimum_fit_anchor_count,
+    const std::vector<double>& observation_weights = {}) {
     RobustFit result;
     result.robust_weights.assign(x.size(), 1.0);
+    if (!observation_weights.empty()) {
+        result.robust_weights = observation_weights;
+    }
     result.fitted = values;
 
     for (std::size_t iteration = 0;
          iteration < robust_iterations;
          ++iteration) {
         result.fitted = local_polynomial_predict(
-            x, values, x, half_window_m, result.robust_weights);
+            x, values, x, half_window_m, result.robust_weights, adapt_to_support,
+            adaptive_neighbor_count);
 
         std::vector<double> residuals(values.size());
         for (std::size_t index = 0; index < values.size(); ++index) {
@@ -358,20 +574,28 @@ RobustFit robust_local_quadratic(
             } else {
                 result.robust_weights[index] = 0.0;
             }
+            if (!observation_weights.empty()) {
+                result.robust_weights[index] *= observation_weights[index];
+            }
         }
     }
 
     result.fitted = local_polynomial_predict(
-        x, values, x, half_window_m, result.robust_weights);
+        x, values, x, half_window_m, result.robust_weights, adapt_to_support,
+        adaptive_neighbor_count);
     return result;
 }
 
 std::vector<Point3D> build_curve(
     const std::vector<Point3D>& points,
-    const AnchorSet& anchors) {
+    const AnchorSet& anchors,
+    bool adapt_to_support = false,
+    double plan_window_m = plan_half_window_m,
+    std::size_t adaptive_neighbor_count = minimum_fit_anchor_count) {
     std::vector<double> x;
     std::vector<double> y;
     std::vector<double> z;
+    std::vector<double> observation_weights;
     x.reserve(anchors.centers.size());
     y.reserve(anchors.centers.size());
     z.reserve(anchors.centers.size());
@@ -380,11 +604,19 @@ std::vector<Point3D> build_curve(
         y.push_back(anchor.y);
         z.push_back(anchor.z);
     }
+    if (adapt_to_support) {
+        observation_weights.reserve(anchors.counts.size());
+        for (const std::size_t count : anchors.counts) {
+            observation_weights.push_back(static_cast<double>(count));
+        }
+    }
 
     const RobustFit y_fit =
-        robust_local_quadratic(x, y, plan_half_window_m);
+        robust_local_quadratic(x, y, plan_window_m, adapt_to_support,
+            adaptive_neighbor_count, observation_weights);
     const RobustFit z_fit =
-        robust_local_quadratic(x, z, height_half_window_m);
+        robust_local_quadratic(x, z, height_half_window_m, adapt_to_support,
+            adaptive_neighbor_count, observation_weights);
 
     const auto minimum_maximum_x = std::minmax_element(
         points.begin(),
@@ -397,9 +629,11 @@ std::vector<Point3D> build_curve(
         minimum_maximum_x.second->x
     };
     const std::vector<double> endpoint_y = local_polynomial_predict(
-        x, y, endpoint_x, plan_half_window_m, y_fit.robust_weights);
+        x, y, endpoint_x, plan_window_m, y_fit.robust_weights, adapt_to_support,
+        adaptive_neighbor_count);
     const std::vector<double> endpoint_z = local_polynomial_predict(
-        x, z, endpoint_x, height_half_window_m, z_fit.robust_weights);
+        x, z, endpoint_x, height_half_window_m, z_fit.robust_weights, adapt_to_support,
+        adaptive_neighbor_count);
 
     std::vector<Point3D> candidates;
     candidates.reserve(anchors.centers.size() + 2);
@@ -422,9 +656,104 @@ std::vector<Point3D> build_curve(
         fail(
             StatusCode::invalid_input,
             DiagnosticCode::insufficient_spatial_support,
-            "Point-cloud centerline does not contain two distinct X positions");
+            "Point-cloud centerline does not contain two distinct longitudinal positions");
     }
     return curve;
+}
+
+double section_longitudinal_coordinate(
+    const std::vector<Point3D>& ordered,
+    const Point3D& point,
+    double half_window_m) {
+    const auto first = std::lower_bound(
+        ordered.begin(), ordered.end(), point.x - half_window_m,
+        [](const Point3D& candidate, double value) { return candidate.x < value; });
+    const auto last = std::upper_bound(
+        first, ordered.end(), point.x + half_window_m,
+        [](double value, const Point3D& candidate) { return value < candidate.x; });
+    const long double count = static_cast<long double>(last - first);
+    long double mean_x = 0.0L;
+    long double mean_y = 0.0L;
+    for (auto iterator = first; iterator != last; ++iterator) {
+        mean_x += iterator->x;
+        mean_y += iterator->y;
+    }
+    mean_x /= count;
+    mean_y /= count;
+    long double xx = 0.0L;
+    long double xy = 0.0L;
+    long double yy = 0.0L;
+    for (auto iterator = first; iterator != last; ++iterator) {
+        const long double dx = static_cast<long double>(iterator->x) - mean_x;
+        const long double dy = static_cast<long double>(iterator->y) - mean_y;
+        xx += dx * dx;
+        xy += dx * dy;
+        yy += dy * dy;
+    }
+    const long double angle = 0.5L * std::atan2(2.0L * xy, xx - yy);
+    const long double cosine = std::cos(angle);
+    const long double sine = std::sin(angle);
+    return static_cast<double>(mean_x + cosine *
+        ((static_cast<long double>(point.x) - mean_x) * cosine +
+         (static_cast<long double>(point.y) - mean_y) * sine));
+}
+
+double interpolate_transverse(
+    const std::vector<Point3D>& curve,
+    double longitudinal_m) {
+    auto right = std::upper_bound(
+        curve.begin(), curve.end(), longitudinal_m,
+        [](double value, const Point3D& point) { return value < point.x; });
+    if (right == curve.begin()) {
+        ++right;
+    } else if (right == curve.end()) {
+        --right;
+    }
+    const Point3D& left = *(right - 1);
+    const double slope = (right->y - left.y) / (right->x - left.x);
+    return left.y + slope * (longitudinal_m - left.x);
+}
+
+std::vector<Point3D> build_sparse_curve(
+    const std::vector<Point3D>& points,
+    const AnchorSet& anchors) {
+    const std::vector<Point3D> initial = build_curve(points, anchors, true);
+    std::vector<double> residuals;
+    residuals.reserve(points.size());
+    for (const Point3D& point : points) {
+        residuals.push_back(point.y - interpolate_transverse(initial, point.x));
+    }
+    const double center = median(residuals);
+    for (double& residual : residuals) {
+        residual = std::abs(residual - center);
+    }
+    const double transverse_scale_m = 1.4826 * median(std::move(residuals));
+    const double plan_window_m = std::max(
+        plan_half_window_m, 6.0 * transverse_scale_m);
+    if (plan_window_m == plan_half_window_m) {
+        return initial;
+    }
+
+    // Wide sections need support from neighbouring sections, not a noisy
+    // independent median in each sparsely populated one-metre bin.
+    std::vector<Point3D> ordered = points;
+    std::sort(ordered.begin(), ordered.end(), point_less);
+    std::vector<Point3D> section_points = points;
+    for (Point3D& point : section_points) {
+        // Use the fitted local tangent to remove a section's transverse
+        // contribution to the global longitudinal coordinate, including at
+        // the endpoints. Z still belongs to that same physical section.
+        point.x = section_longitudinal_coordinate(ordered, point, plan_window_m);
+    }
+    const AnchorSet section_anchors = spatial_bin_anchors(section_points, true);
+    if (section_anchors.centers.size() < minimum_fit_anchor_count) {
+        fail(
+            StatusCode::invalid_input,
+            DiagnosticCode::insufficient_spatial_support,
+            "At least three distinct longitudinal anchors are required");
+    }
+    return build_curve(section_points, section_anchors, true, plan_window_m,
+        local_minimum_neighbors);
 }
 
 std::vector<Point3D> sample_curve(
@@ -475,7 +804,7 @@ std::vector<Point3D> sample_curve(
     for (std::size_t index = 0; index <= last_standard_index; ++index) {
         stations.push_back(static_cast<double>(index) * interval_m);
     }
-    if (total_length_m - stations.back() >
+    if (stations.size() == 1 || total_length_m - stations.back() >
         endpoint_remainder_tolerance_m) {
         stations.push_back(total_length_m);
     } else {
@@ -534,40 +863,35 @@ std::vector<Point3D> PointCloudFitter::fit_and_sample(
     const std::vector<Point3D>& points,
     double interval_m) const {
     LocalPointCloud local = center_points(points);
-    const AnchorSet anchors = spatial_bin_medians(local.points);
-    if (anchors.centers.size() < minimum_anchor_count) {
+    const PlanBasis basis = estimate_plan_basis(local.points);
+    const std::vector<Point3D> oriented_points =
+        transform_to_plan_basis(local.points, basis);
+    const AnchorSet anchors = spatial_bin_anchors(oriented_points);
+    if (anchors.centers.size() < minimum_fit_anchor_count) {
         fail(
             StatusCode::invalid_input,
             DiagnosticCode::insufficient_spatial_support,
-            "At least twenty populated one-metre X bins are required");
+            "At least three distinct longitudinal anchors are required");
     }
-    if (std::any_of(
+    bool sparse_support = anchors.centers.size() < minimum_anchor_count ||
+        std::any_of(
             anchors.counts.begin(),
             anchors.counts.end(),
             [](std::size_t count) {
                 return count < minimum_points_per_bin;
-            })) {
-        fail(
-            StatusCode::invalid_input,
-            DiagnosticCode::insufficient_spatial_support,
-            "Every populated one-metre X bin must contain at least three points");
-    }
-
-    const std::vector<Point3D> curve = build_curve(local.points, anchors);
-    std::vector<Point3D> samples = sample_curve(curve, interval_m);
-    for (auto& sample : samples) {
-        sample.x += local.origin.x;
-        sample.y += local.origin.y;
-        sample.z += local.origin.z;
-        if (!std::isfinite(sample.x) ||
-            !std::isfinite(sample.y) ||
-            !std::isfinite(sample.z)) {
-            fail(
-                StatusCode::numerical_failure,
-                DiagnosticCode::degenerate_fit,
-                "Point-cloud centerline output contains a non-finite coordinate");
+            });
+    for (std::size_t index = 1; index < anchors.centers.size(); ++index) {
+        if (anchors.centers[index].x - anchors.centers[index-1].x >=
+            height_half_window_m * 0.5) {
+            sparse_support = true;
         }
     }
+
+    const std::vector<Point3D> curve = sparse_support
+        ? build_sparse_curve(oriented_points, anchors)
+        : build_curve(oriented_points, anchors);
+    std::vector<Point3D> samples = sample_curve(curve, interval_m);
+    transform_from_plan_basis(samples, basis, local.origin);
     return samples;
 }
 

@@ -17,7 +17,7 @@
 - `ALIGNMENT_RECONSTRUCT_EXTERNAL_SPARSE_CENTERLINE_CSV`：按线路方向排列的无宽度中心线参考。
 - `ALIGNMENT_RECONSTRUCT_EXTERNAL_WIDE_CLOUD_CSV`：相同线路范围的带宽度散点，行序不限。
 
-测试对两组数据分别调用 `fit_point_cloud(..., 5.0)`，核查反转行序后逐坐标完全一致，并以无宽度参考折线比较平面最大差 / RMS 和同位置高程最大差 / RMS。当前门槛用于本次私有数据回归，不是通用工程验收标准；具体数值与本轮证据见 `docs/verification/2026-10-18-point-cloud-sparse-and-wide.md`。未提供任一变量时明确跳过，原始数据和转换后的 CSV 保持忽略，不提交。
+测试对两组数据分别调用 `fit_point_cloud(..., 5.0)`，核查反转行序后逐坐标完全一致，并以无宽度参考折线比较平面最大差 / RMS 和同位置高程最大差 / RMS。宽带平面门槛已收紧为最大差 1 m、RMS 0.3 m。当前门槛用于本次私有数据回归，不是通用工程验收标准；具体数值与本轮证据见 `docs/verification/2026-10-18-wide-cloud-centering.md`。未提供任一变量时明确跳过，原始数据和转换后的 CSV 保持忽略，不提交。
 
 ## 坐标和单位映射
 

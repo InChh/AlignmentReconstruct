@@ -517,6 +517,44 @@ AR_TEST(point_cloud_fit_handles_a_curved_wide_sparse_cloud) {
     }
 }
 
+AR_TEST(point_cloud_fit_does_not_move_the_band_center_towards_dense_side_points) {
+    std::vector<Point3D> points;
+    for (std::size_t index = 0; index <= 100; ++index) {
+        const double x = 5.0 * static_cast<double>(index);
+        for (std::size_t across = 0; across <= 10; ++across) {
+            points.push_back({x, -20.0 + 4.0 * static_cast<double>(across), 100.0 + 0.01*x});
+        }
+        points.insert(points.end(), 40, Point3D{x, 10.0, 100.0 + 0.01*x});
+    }
+    const auto result = fit_point_cloud(points, 5.0);
+    AR_EXPECT(result.ok());
+    for (const auto& point : result.centerline_points) {
+        AR_EXPECT_NEAR(point.y, 0.0, 0.02);
+        AR_EXPECT_NEAR(point.z, 100.0 + 0.01*point.x, 1.0e-8);
+    }
+    std::reverse(points.begin(), points.end());
+    const auto reversed = fit_point_cloud(points, 5.0);
+    AR_EXPECT(reversed.ok());
+    expect_same_points(result.centerline_points, reversed.centerline_points, 0.0);
+}
+
+AR_TEST(point_cloud_fit_band_boundaries_ignore_an_isolated_transverse_outlier) {
+    std::vector<Point3D> points;
+    for (std::size_t index = 0; index <= 100; ++index) {
+        const double x = 5.0 * static_cast<double>(index);
+        for (std::size_t across = 0; across <= 10; ++across) {
+            points.push_back({x, -20.0 + 4.0 * static_cast<double>(across), 100.0 + 0.01*x});
+        }
+    }
+    points.push_back({250.0, 200.0, 102.5});
+    const auto result = fit_point_cloud(points, 5.0);
+    AR_EXPECT(result.ok());
+    for (const auto& point : result.centerline_points) {
+        AR_EXPECT_NEAR(point.y, 0.0, 0.02);
+        AR_EXPECT_NEAR(point.z, 100.0 + 0.01*point.x, 1.0e-8);
+    }
+}
+
 AR_TEST(point_cloud_fit_handles_sub_metre_extent_and_keeps_both_endpoints) {
     std::vector<Point3D> points;
     for (std::size_t index = 0; index < 10; ++index) {
@@ -560,8 +598,8 @@ AR_TEST(point_cloud_fit_handles_the_optional_sparse_and_wide_reference_pair) {
         expect_same_points(fitted.centerline_points,reverse_result.centerline_points,0.0);
         const auto error=reference_error(fitted.centerline_points,reference);
         const bool narrow=input==&reference;
-        AR_EXPECT(error.maximum_plan_m < (narrow ? 0.005 : 4.0));
-        AR_EXPECT(error.rms_plan_m < (narrow ? 0.001 : 1.5));
+        AR_EXPECT(error.maximum_plan_m < (narrow ? 0.005 : 1.0));
+        AR_EXPECT(error.rms_plan_m < (narrow ? 0.001 : 0.3));
         AR_EXPECT(error.maximum_height_m < (narrow ? 0.0001 : 0.5));
         AR_EXPECT(error.rms_height_m < (narrow ? 0.00001 : 0.15));
         std::cout << "  input=" << input->size() << ", output=" << fitted.centerline_points.size()

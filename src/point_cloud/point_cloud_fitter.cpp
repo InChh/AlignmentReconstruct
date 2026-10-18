@@ -91,6 +91,15 @@ double median(std::vector<double> values) {
     return lower + (upper - lower) * 0.5;
 }
 
+double quantile(std::vector<double> values, double probability) {
+    std::sort(values.begin(), values.end());
+    const double position = probability * static_cast<double>(values.size() - 1);
+    const auto lower = static_cast<std::size_t>(position);
+    const auto upper = std::min(lower + 1, values.size() - 1);
+    return values[lower] + (position - static_cast<double>(lower)) *
+        (values[upper] - values[lower]);
+}
+
 Point3D coordinate_median(const std::vector<Point3D>& points) {
     std::vector<double> x;
     std::vector<double> y;
@@ -402,6 +411,40 @@ std::array<long double, 3> solve_symmetric_system(
     return solution;
 }
 
+std::array<long double, 3> local_coefficients(
+    const std::vector<double>& x,
+    const std::vector<double>& values,
+    const std::vector<std::size_t>& selected,
+    const std::vector<double>& weights,
+    double target,
+    double coordinate_scale_m,
+    bool quadratic = true) {
+    std::array<std::array<long double, 3>, 3> normal{};
+    std::array<long double, 3> right_hand_side{};
+    for (std::size_t selected_index = 0;
+         selected_index < selected.size(); ++selected_index) {
+        const std::size_t input_index = selected[selected_index];
+        const long double dx =
+            (static_cast<long double>(x[input_index]) -
+             static_cast<long double>(target)) /
+            static_cast<long double>(coordinate_scale_m);
+        const std::array<long double, 3> basis{1.0L, dx, quadratic ? dx * dx : 0.0L};
+        const long double weight = static_cast<long double>(
+            std::max(weights[selected_index], 1.0e-15));
+        const long double value = static_cast<long double>(values[input_index]);
+        for (std::size_t row = 0; row < 3; ++row) {
+            right_hand_side[row] += weight * basis[row] * value;
+            for (std::size_t column = 0; column < 3; ++column) {
+                normal[row][column] += weight * basis[row] * basis[column];
+            }
+        }
+    }
+    if (!quadratic) {
+        normal[2][2] = 1.0L;
+    }
+    return solve_symmetric_system(std::move(normal), std::move(right_hand_side));
+}
+
 double local_polynomial_prediction(
     const std::vector<double>& x,
     const std::vector<double>& values,
@@ -472,34 +515,8 @@ double local_polynomial_prediction(
         weights = distance_weights;
     }
 
-    std::array<std::array<long double, 3>, 3> normal{};
-    std::array<long double, 3> right_hand_side{};
-    for (std::size_t selected_index = 0;
-         selected_index < selected.size();
-         ++selected_index) {
-        const std::size_t input_index = selected[selected_index];
-        const long double difference =
-            static_cast<long double>(x[input_index]) -
-            static_cast<long double>(target);
-        const long double dx = adapt_to_support
-            ? difference / static_cast<long double>(coordinate_scale_m)
-            : difference;
-        const std::array<long double, 3> basis{1.0L, dx, dx * dx};
-        const long double weight = static_cast<long double>(
-            std::max(weights[selected_index], 1.0e-15));
-        const long double value =
-            static_cast<long double>(values[input_index]);
-        for (std::size_t row = 0; row < 3; ++row) {
-            right_hand_side[row] += weight * basis[row] * value;
-            for (std::size_t column = 0; column < 3; ++column) {
-                normal[row][column] +=
-                    weight * basis[row] * basis[column];
-            }
-        }
-    }
-
-    const auto coefficients =
-        solve_symmetric_system(std::move(normal), std::move(right_hand_side));
+    const auto coefficients = local_coefficients(
+        x, values, selected, weights, target, adapt_to_support ? coordinate_scale_m : 1.0);
     const double prediction = static_cast<double>(coefficients[0]);
     if (!std::isfinite(prediction)) {
         fail(
@@ -508,6 +525,85 @@ double local_polynomial_prediction(
             "Local quadratic point-cloud fit produced a non-finite coordinate");
     }
     return prediction;
+}
+
+std::array<long double, 3> quantile_coefficients(
+    const std::vector<double>& x,
+    const std::vector<double>& y,
+    const std::vector<std::size_t>& selected,
+    const std::vector<double>& distance_weights,
+    double target,
+    double half_window_m,
+    double probability,
+    bool quadratic = true) {
+    auto coefficients = local_coefficients(
+        x, y, selected, distance_weights, target, half_window_m, quadratic);
+    std::vector<double> weights(selected.size());
+    for (std::size_t iteration = 0; iteration < 60; ++iteration) {
+        for (std::size_t index = 0; index < selected.size(); ++index) {
+            const std::size_t point_index = selected[index];
+            const long double dx =
+                (static_cast<long double>(x[point_index]) - target) / half_window_m;
+            const double residual = y[point_index] - static_cast<double>(
+                coefficients[0] + dx * (coefficients[1] + dx * coefficients[2]));
+            const double asymmetry = residual >= 0.0 ? probability : 1.0 - probability;
+            weights[index] = distance_weights[index] * asymmetry /
+                std::max(std::abs(residual), 1.0e-4);
+        }
+        const auto updated = local_coefficients(
+            x, y, selected, weights, target, half_window_m, quadratic);
+        long double change = 0.0L;
+        for (std::size_t index = 0; index < coefficients.size(); ++index) {
+            change = std::max(change, std::abs(updated[index] - coefficients[index]));
+        }
+        coefficients = updated;
+        if (change < 1.0e-7L) {
+            break;
+        }
+    }
+    return coefficients;
+}
+
+double band_center_prediction(
+    const std::vector<double>& x,
+    const std::vector<double>& y,
+    double target,
+    double half_window_m) {
+    std::vector<std::size_t> selected;
+    for (std::size_t index = 0; index < x.size(); ++index) {
+        if (std::abs(x[index] - target) < half_window_m) {
+            selected.push_back(index);
+        }
+    }
+    const std::size_t minimum_neighbors = std::min(local_minimum_neighbors, x.size());
+    if (selected.size() < minimum_neighbors) {
+        selected.resize(x.size());
+        std::iota(selected.begin(), selected.end(), std::size_t{0});
+        std::stable_sort(selected.begin(), selected.end(), [&](std::size_t left, std::size_t right) {
+            return std::abs(x[left] - target) < std::abs(x[right] - target);
+        });
+        selected.resize(minimum_neighbors);
+        std::sort(selected.begin(), selected.end());
+    }
+    for (const std::size_t index : selected) {
+        half_window_m = std::max(half_window_m, 1.01 * std::abs(x[index] - target));
+    }
+    std::vector<double> weights;
+    weights.reserve(selected.size());
+    for (const std::size_t index : selected) {
+        const double distance = std::abs(x[index] - target) / half_window_m;
+        const double complement = 1.0 - distance * distance * distance;
+        weights.push_back(complement * complement * complement);
+    }
+    auto lower = quantile_coefficients(x, y, selected, weights, target, half_window_m, 0.01);
+    auto upper = quantile_coefficients(x, y, selected, weights, target, half_window_m, 0.99);
+    // If the two boundaries do not agree on curvature, a quadratic term is
+    // fitting boundary noise. Estimate the local trend with a linear model.
+    if (std::abs(lower[2] + upper[2]) <= 2.0L * std::abs(lower[2] - upper[2])) {
+        lower = quantile_coefficients(x, y, selected, weights, target, half_window_m, 0.01, false);
+        upper = quantile_coefficients(x, y, selected, weights, target, half_window_m, 0.99, false);
+    }
+    return static_cast<double>((lower[0] + upper[0]) * 0.5L);
 }
 
 std::vector<double> local_polynomial_predict(
@@ -700,7 +796,8 @@ double section_longitudinal_coordinate(
 
 double interpolate_transverse(
     const std::vector<Point3D>& curve,
-    double longitudinal_m) {
+    double longitudinal_m,
+    double* slope_out = nullptr) {
     auto right = std::upper_bound(
         curve.begin(), curve.end(), longitudinal_m,
         [](double value, const Point3D& point) { return value < point.x; });
@@ -711,7 +808,68 @@ double interpolate_transverse(
     }
     const Point3D& left = *(right - 1);
     const double slope = (right->y - left.y) / (right->x - left.x);
+    if (slope_out != nullptr) {
+        *slope_out = slope;
+    }
     return left.y + slope * (longitudinal_m - left.x);
+}
+
+std::vector<Point3D> build_band_curve(
+    const std::vector<Point3D>& ordered,
+    double half_window_m) {
+    const AnchorSet anchors = spatial_bin_anchors(ordered, true);
+    if (anchors.centers.size() < minimum_fit_anchor_count) {
+        fail(StatusCode::invalid_input, DiagnosticCode::insufficient_spatial_support,
+            "At least three distinct longitudinal anchors are required");
+    }
+    std::vector<double> raw_x;
+    std::vector<double> raw_y;
+    raw_x.reserve(ordered.size());
+    raw_y.reserve(ordered.size());
+    for (const auto& point : ordered) {
+        raw_x.push_back(point.x);
+        raw_y.push_back(point.y);
+    }
+    std::vector<double> anchor_x;
+    std::vector<double> anchor_z;
+    std::vector<double> counts;
+    for (std::size_t index = 0; index < anchors.centers.size(); ++index) {
+        anchor_x.push_back(anchors.centers[index].x);
+        anchor_z.push_back(anchors.centers[index].z);
+        counts.push_back(static_cast<double>(anchors.counts[index]));
+    }
+    // Quantile fits need enough independent sections. Their evaluation grid
+    // follows occupied anchors, so a large gap never creates synthetic input.
+    const double knot_spacing_m = std::max(bin_width_m, half_window_m / 50.0);
+    std::vector<double> targets{raw_x.front()};
+    for (const double x : anchor_x) {
+        if (x - targets.back() >= knot_spacing_m) {
+            targets.push_back(x);
+        }
+    }
+    if (raw_x.back() > targets.back()) {
+        targets.push_back(raw_x.back());
+    }
+    // Keep three model positions even when the occupied support is short.
+    if (targets.size() < minimum_fit_anchor_count) {
+        targets = anchor_x;
+    }
+    std::vector<double> center_y;
+    center_y.reserve(targets.size());
+    for (const double target : targets) {
+        center_y.push_back(band_center_prediction(raw_x, raw_y, target, half_window_m));
+    }
+    const auto y_fit = robust_local_quadratic(targets, center_y, plan_half_window_m, true);
+    const auto z_fit = robust_local_quadratic(anchor_x, anchor_z, height_half_window_m,
+        true, local_minimum_neighbors, counts);
+    const auto heights = local_polynomial_predict(anchor_x, anchor_z, targets,
+        height_half_window_m, z_fit.robust_weights, true, local_minimum_neighbors);
+    std::vector<Point3D> curve;
+    curve.reserve(targets.size());
+    for (std::size_t index = 0; index < targets.size(); ++index) {
+        curve.push_back({targets[index], y_fit.fitted[index], heights[index]});
+    }
+    return curve;
 }
 
 std::vector<Point3D> build_sparse_curve(
@@ -724,18 +882,20 @@ std::vector<Point3D> build_sparse_curve(
         residuals.push_back(point.y - interpolate_transverse(initial, point.x));
     }
     const double center = median(residuals);
+    const double residual_span_m = quantile(residuals, 0.95) - quantile(residuals, 0.05);
     for (double& residual : residuals) {
         residual = std::abs(residual - center);
     }
-    const double transverse_scale_m = 1.4826 * median(std::move(residuals));
+    const double transverse_scale_m = std::max(
+        1.4826 * median(std::move(residuals)), residual_span_m / 3.29);
     const double plan_window_m = std::max(
-        plan_half_window_m, 6.0 * transverse_scale_m);
+        plan_half_window_m, 10.0 * transverse_scale_m);
     if (plan_window_m == plan_half_window_m) {
         return initial;
     }
 
-    // Wide sections need support from neighbouring sections, not a noisy
-    // independent median in each sparsely populated one-metre bin.
+    // A band's geometric center is the midpoint of its two robust boundaries;
+    // a population mean follows sampling density and can drift to either side.
     std::vector<Point3D> ordered = points;
     std::sort(ordered.begin(), ordered.end(), point_less);
     std::vector<Point3D> section_points = points;
@@ -743,17 +903,28 @@ std::vector<Point3D> build_sparse_curve(
         // Use the fitted local tangent to remove a section's transverse
         // contribution to the global longitudinal coordinate, including at
         // the endpoints. Z still belongs to that same physical section.
-        point.x = section_longitudinal_coordinate(ordered, point, plan_window_m);
+        point.x = section_longitudinal_coordinate(ordered, point,
+            std::max(plan_half_window_m, 6.0 * transverse_scale_m));
     }
-    const AnchorSet section_anchors = spatial_bin_anchors(section_points, true);
-    if (section_anchors.centers.size() < minimum_fit_anchor_count) {
-        fail(
-            StatusCode::invalid_input,
-            DiagnosticCode::insufficient_spatial_support,
-            "At least three distinct longitudinal anchors are required");
+    std::sort(section_points.begin(), section_points.end(), point_less);
+    auto curve = build_band_curve(section_points, plan_window_m);
+    for (std::size_t iteration = 1; iteration < robust_iterations; ++iteration) {
+        section_points = ordered;
+        for (auto& point : section_points) {
+            const double source_x = point.x;
+            double longitudinal_m = source_x;
+            for (std::size_t step = 0; step < 5; ++step) {
+                double slope = 0.0;
+                const double transverse_m = interpolate_transverse(curve, longitudinal_m, &slope);
+                longitudinal_m += (source_x - longitudinal_m +
+                    slope * (point.y - transverse_m)) / (1.0 + slope * slope);
+            }
+            point.x = longitudinal_m;
+        }
+        std::sort(section_points.begin(), section_points.end(), point_less);
+        curve = build_band_curve(section_points, plan_window_m);
     }
-    return build_curve(section_points, section_anchors, true, plan_window_m,
-        local_minimum_neighbors);
+    return curve;
 }
 
 std::vector<Point3D> sample_curve(

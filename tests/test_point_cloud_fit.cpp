@@ -1,6 +1,8 @@
 #include "test_framework.h"
 
 #include "alignment_reconstruct/point_cloud_fit.h"
+#include "alignment_reconstruct/reconstruction.h"
+#include "horizontal/horizontal_alignment.h"
 
 #include <algorithm>
 #include <cmath>
@@ -179,6 +181,106 @@ ReferenceError reference_error(
 }
 
 } // namespace
+
+namespace {
+
+void expect_short_spirals_from_wide_sections(
+    double radius_m, double entry_m, double exit_m,
+    double half_width_m, double angle_rad, double translation_m,
+    bool alternating_spacing = false) {
+    std::vector<HorizontalControlPoint> controls{
+        {HorizontalControlPointKind::start, {0.0, 0.0}, 0.0, 0.0, 0.0},
+        {HorizontalControlPointKind::intersection, {800.0, 0.0}, radius_m, entry_m, exit_m},
+        {HorizontalControlPointKind::intersection, {1500.0, 800.0}, radius_m, entry_m, exit_m},
+        {HorizontalControlPointKind::end, {2300.0, 800.0}, 0.0, 0.0, 0.0}
+    };
+    for (auto& control : controls) {
+        const auto rotated = rotate_plan(
+            {control.position.x, control.position.y, 0.0}, angle_rad);
+        control.position = {rotated.x + translation_m, rotated.y + 2.0 * translation_m};
+    }
+    const detail::HorizontalAlignment source(controls, 0.0);
+    std::vector<Point3D> points;
+    double station_m = 0.0;
+    for (std::size_t section = 0; ; ++section) {
+        const double current_m = std::min(station_m, source.end_station_m());
+        const auto state = source.evaluate(current_m);
+        for (std::size_t across = 0; across < 9; ++across) {
+            const double offset_m = half_width_m * (static_cast<double>(across) / 4.0 - 1.0);
+            points.push_back({state.point.x - offset_m * std::sin(state.heading_rad),
+                state.point.y + offset_m * std::cos(state.heading_rad), 100.0});
+        }
+        if (current_m == source.end_station_m()) {
+            break;
+        }
+        station_m += alternating_spacing ? (section % 2 == 0 ? 3.0 : 7.0) : 5.0;
+    }
+    const auto fitted = fit_point_cloud(points, 5.0);
+    AR_EXPECT(fitted.ok());
+    ReconstructionOptions options;
+    options.curvature_threshold_inverse_m = 0.0001;
+    const auto reconstructed = reconstruct(fitted.centerline_points, options);
+    std::cout << "  wide short spirals R/L=" << radius_m << '/' << entry_m << '/' << exit_m
+              << ", alternating spacing=" << alternating_spacing
+              << ", controls=" << reconstructed.horizontal.size() << '\n';
+    AR_EXPECT(reconstructed.ok());
+    AR_EXPECT(reconstructed.horizontal.size() == controls.size());
+    for (std::size_t index = 1; index + 1 < controls.size(); ++index) {
+        const auto& curve = reconstructed.horizontal[index];
+        std::cout << "  recovered R/L=" << curve.radius_m << '/'
+                  << curve.entry_spiral_length_m << '/' << curve.exit_spiral_length_m << '\n';
+        AR_EXPECT_NEAR(curve.radius_m, radius_m, 0.5);
+        AR_EXPECT_NEAR(curve.entry_spiral_length_m, entry_m, 0.5);
+        AR_EXPECT_NEAR(curve.exit_spiral_length_m, exit_m, 0.5);
+    }
+    double maximum_error_m = 0.0;
+    for (const auto& point : fitted.centerline_points) {
+        const auto projected = source.project({point.x, point.y});
+        AR_EXPECT(projected.valid);
+        maximum_error_m = std::max(maximum_error_m, projected.distance_m);
+        AR_EXPECT_NEAR(point.z, 100.0, 1.0e-8);
+    }
+    std::cout << "  recovered center max XY=" << maximum_error_m << " m\n";
+    AR_EXPECT(maximum_error_m < 0.005);
+    std::mt19937 generator(714u);
+    std::shuffle(points.begin(), points.end(), generator);
+    const auto shuffled = fit_point_cloud(points, 5.0);
+    AR_EXPECT(shuffled.ok());
+    expect_same_points(fitted.centerline_points, shuffled.centerline_points, 0.0);
+}
+
+} // namespace
+
+AR_TEST(point_cloud_fit_preserves_short_unequal_spirals_in_wide_sections) {
+    expect_short_spirals_from_wide_sections(1000.0, 8.0, 18.0, 20.0, 0.4, 0.0);
+}
+
+AR_TEST(point_cloud_fit_preserves_other_short_spirals_at_large_oblique_coordinates) {
+    for (const bool alternating_spacing : {false, true}) {
+        expect_short_spirals_from_wide_sections(600.0, 15.0, 25.0, 10.0,
+            0.7853981633974483, 1.0e6, alternating_spacing);
+    }
+}
+
+AR_TEST(point_cloud_fit_keeps_non_normal_collinear_sections_on_the_band_center) {
+    std::vector<Point3D> points;
+    for (std::size_t section = 0; section <= 120; ++section) {
+        const double x = 5.0 * static_cast<double>(section);
+        const double y = 0.00001 * x * (x - 600.0);
+        for (std::size_t across = 0; across < 9; ++across) {
+            points.push_back({x, y + 5.0 * (static_cast<double>(across) - 4.0), 100.0});
+        }
+    }
+    const auto fitted = fit_point_cloud(points, 5.0);
+    AR_EXPECT(fitted.ok());
+    double maximum_error_m = 0.0;
+    for (const auto& point : fitted.centerline_points) {
+        maximum_error_m = std::max(maximum_error_m,
+            std::abs(point.y - 0.00001 * point.x * (point.x - 600.0)));
+    }
+    std::cout << "  non-normal sections center max XY=" << maximum_error_m << " m\n";
+    AR_EXPECT(maximum_error_m < 0.005);
+}
 
 AR_TEST(point_cloud_fit_samples_a_straight_centerline_by_plan_length) {
     std::vector<Point3D> points = straight_point_cloud();

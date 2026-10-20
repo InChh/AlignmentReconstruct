@@ -984,13 +984,9 @@ double three_point_tangent(
     }
 
     if (std::abs(deflection) < 0.01) {
-        double result = 0.5 * (incoming + outgoing);
-        if (result < 0.0) {
-            result += 2.0 * pi;
-        } else if (result > 2.0 * pi) {
-            result -= 2.0 * pi;
-        }
-        return result;
+        // Average on the circle: headings just below 2*pi and just above
+        // zero describe the same tangent, not opposite directions.
+        return normalize_heading(incoming + 0.5 * deflection);
     }
     if (!has_retained_circle_center) {
         return normalize_heading(incoming + 0.5 * deflection);
@@ -1016,12 +1012,35 @@ double three_point_tangent(
     return result;
 }
 
-} // namespace
+struct CurvatureWindowSupport {
+    std::size_t first_index = 0;
+    std::size_t last_index = 0;
+};
 
-HorizontalSampleAnalysis classify_horizontal_samples(
+CurvatureWindowSupport curvature_window_support(
+    const std::vector<double>& cumulative_distance_m,
+    double window_m) {
+    CurvatureWindowSupport support;
+    const std::size_t count = cumulative_distance_m.size();
+    while (support.first_index < count &&
+           cumulative_distance_m[support.first_index] <= window_m) {
+        ++support.first_index;
+    }
+    support.last_index = count - 2;
+    while (support.last_index > 0 &&
+           cumulative_distance_m.back() -
+               cumulative_distance_m[support.last_index] <= window_m) {
+        --support.last_index;
+    }
+    return support;
+}
+
+HorizontalSampleAnalysis classify_horizontal_samples_impl(
     const std::vector<Point2D>& ordered_points,
     const ReconstructionOptions& options,
-    const std::vector<HorizontalCurvatureSample>& curvature_graph) {
+    const std::vector<HorizontalCurvatureSample>& curvature_graph,
+    bool& curves_erased_by_dynamic) {
+    curves_erased_by_dynamic = false;
     if (ordered_points.size() < 2) {
         throw std::invalid_argument("At least two ordered horizontal samples are required");
     }
@@ -1097,17 +1116,10 @@ HorizontalSampleAnalysis classify_horizontal_samples(
         return analysis;
     }
 
-    std::size_t first_supported = 0;
-    while (first_supported < count &&
-           analysis.cumulative_distance_m[first_supported] <= options.curvature_window_m) {
-        ++first_supported;
-    }
-    std::size_t last_supported = count - 2;
-    while (last_supported > 0 &&
-           analysis.cumulative_distance_m.back() -
-               analysis.cumulative_distance_m[last_supported] <= options.curvature_window_m) {
-        --last_supported;
-    }
+    const CurvatureWindowSupport support = curvature_window_support(
+        analysis.cumulative_distance_m, options.curvature_window_m);
+    const std::size_t first_supported = support.first_index;
+    const std::size_t last_supported = support.last_index;
     if (first_supported >= last_supported) {
         throw std::invalid_argument("Horizontal samples do not span the curvature window");
     }
@@ -1203,9 +1215,11 @@ HorizontalSampleAnalysis classify_horizontal_samples(
         analysis.curvature_inverse_m, property, segments);
     remove_short_curve_ranges(
         analysis.cumulative_distance_m, property, segments);
+    const bool had_curve_segments = segments.size() > 1;
     dynamically_adjust_line_curve_properties(
         ordered_points, analysis.tangent_heading_rad,
         analysis.curvature_inverse_m, 6, property, segments);
+    curves_erased_by_dynamic = had_curve_segments && segments.size() < 2;
     if (segments.size() < 2) {
         LegacyStraightSegment& segment = segments.front();
         segment.following_curve_sample_count = 0;
@@ -1224,6 +1238,31 @@ HorizontalSampleAnalysis classify_horizontal_samples(
         ordered_points, analysis.cumulative_distance_m,
         property, segments);
     finalize_legacy_analysis(analysis, property, segments);
+    return analysis;
+}
+
+} // namespace
+
+bool has_horizontal_curvature_support(
+    const std::vector<double>& cumulative_distance_m,
+    double window_m) {
+    if (cumulative_distance_m.size() < 4 ||
+        cumulative_distance_m.back() <= 2.0 * window_m) {
+        return false;
+    }
+    const CurvatureWindowSupport support = curvature_window_support(
+        cumulative_distance_m, window_m);
+    return support.first_index < support.last_index;
+}
+
+HorizontalSampleAnalysis classify_horizontal_samples(
+    const std::vector<Point2D>& ordered_points,
+    const ReconstructionOptions& options,
+    const std::vector<HorizontalCurvatureSample>& curvature_graph) {
+    bool curves_erased_by_dynamic = false;
+    HorizontalSampleAnalysis analysis = classify_horizontal_samples_impl(
+        ordered_points, options, curvature_graph, curves_erased_by_dynamic);
+    analysis.curves_erased_by_dynamic = curves_erased_by_dynamic;
     return analysis;
 }
 

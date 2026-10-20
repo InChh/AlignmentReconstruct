@@ -37,7 +37,12 @@ struct HorizontalSampleAnalysis {
     std::vector<ClassificationRun> runs;
     std::vector<HorizontalSampleKind> sample_kind;
     std::vector<HorizontalStraightSegment> straight_segments;
+    bool curves_erased_by_dynamic = false;
 };
+
+bool has_horizontal_curvature_support(
+    const std::vector<double>& cumulative_distance_m,
+    double window_m);
 
 HorizontalSampleAnalysis classify_horizontal_samples(
     const std::vector<Point2D>& ordered_points,

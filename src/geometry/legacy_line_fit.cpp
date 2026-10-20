@@ -94,25 +94,24 @@ LegacyLineFitResult fit_legacy_reconstruction_line(
         theta = std::atan(v) / 2.0 + pi;
     }
 
-    double k = 0.0;
-    double a = 0.0;
-    double b = 0.0;
-    if (std::abs(theta - pi / 2.0) < 0.001) {
-        k = 0.0;
-        a = center.x;
-        b = -a / center.x;
+    // Zero cross covariance has an exact axis eigendirection. In particular,
+    // zero slope is horizontal; it must not enter the legacy vertical branch.
+    if (xy == 0.0) {
+        if (xx >= yy) {
+            result.start = {points.front().x, center.y};
+            result.end = {points.back().x, center.y};
+        } else {
+            result.start = {center.x, points.front().y};
+            result.end = {center.x, points.back().y};
+        }
     } else {
-        k = std::tan(theta);
-        b = (y - k * x) / count;
-        a = 1.0;
-    }
-
-    if (k != 0.0) {
-        result.start = add(foot_point(k, -a, b, centered.front()), center);
-        result.end = add(foot_point(k, -a, b, centered.back()), center);
-    } else {
-        result.start = {a, centered.front().y + center.y};
-        result.end = {a, centered.back().y + center.y};
+        // Preserve the active reference arithmetic away from the exact axes.
+        // Do not snap a near-vertical tangent to vertical: that changes its
+        // direction and makes the result depend on the coordinate rotation.
+        const double k = std::tan(theta);
+        const double b = (y - k * x) / count;
+        result.start = add(foot_point(k, -1.0, b, centered.front()), center);
+        result.end = add(foot_point(k, -1.0, b, centered.back()), center);
     }
 
     const Point2D line_vector = subtract(result.end, result.start);

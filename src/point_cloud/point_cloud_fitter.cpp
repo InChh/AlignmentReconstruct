@@ -29,6 +29,7 @@ constexpr std::size_t maximum_output_point_count = 10'000'000;
 constexpr double endpoint_remainder_tolerance_m = 0.01;
 constexpr long double minimum_plan_variance_ratio = 4.0L;
 constexpr double axis_snap_sine = 0.10452846326765347; // sin(6 degrees)
+constexpr double section_relative_tolerance = 1.0e-4;
 
 struct LocalPointCloud {
     Point3D origin;
@@ -1173,6 +1174,375 @@ std::vector<Point3D> build_sparse_curve(
     return curve;
 }
 
+struct SpatialSection {
+    Point3D base;
+    double normal_x = 0.0;
+    double normal_y = 1.0;
+    double station_m = 0.0;
+    std::size_t begin = 0;
+    std::size_t end = 0;
+};
+
+std::vector<double> section_derivative(
+    const std::vector<double>& station,
+    const std::vector<double>& values) {
+    std::vector<double> derivative(values.size());
+    derivative.front() = (values[1] - values[0]) / (station[1] - station[0]);
+    derivative.back() = (values.back() - values[values.size() - 2]) /
+        (station.back() - station[station.size() - 2]);
+    for (std::size_t index = 1; index + 1 < values.size(); ++index) {
+        const double before_m = station[index] - station[index - 1];
+        const double after_m = station[index + 1] - station[index];
+        derivative[index] = -after_m * values[index - 1] /
+            (before_m * (before_m + after_m)) +
+            (after_m - before_m) * values[index] / (before_m * after_m) +
+            before_m * values[index + 1] / (after_m * (before_m + after_m));
+    }
+    return derivative;
+}
+
+bool section_boundaries_support_directions(
+    const std::vector<double>& station,
+    const std::vector<double>& boundary_midpoints,
+    const std::vector<double>& widths) {
+    if (station.size() < local_minimum_neighbors) {
+        return false;
+    }
+    // Collinearity alone does not establish a normal section: parallel slices
+    // of a bent band are collinear too. A valid direction family must leave no
+    // systematic longitudinal drift of the observed two-sided envelope center.
+    // Midpoints are evidence only; the output offset still uses all raw tails.
+    constexpr std::size_t partition_count = 4;
+    const double resolution_m = section_relative_tolerance * median(widths);
+    for (std::size_t partition = 0; partition <= partition_count; ++partition) {
+        const std::size_t begin = partition == 0 ? 0 :
+            (partition - 1) * station.size() / partition_count;
+        const std::size_t end = partition == 0 ? station.size() :
+            partition * station.size() / partition_count;
+        if (end - begin < local_minimum_neighbors) {
+            continue;
+        }
+        std::vector<std::size_t> selected(end - begin);
+        std::iota(selected.begin(), selected.end(), begin);
+        const std::vector<double> weights(selected.size(), 1.0);
+        const double target_m = 0.5 * (station[begin] + station[end - 1]);
+        const double scale_m = station[end - 1] - station[begin];
+        try {
+            const auto coefficients = local_coefficients(station, boundary_midpoints,
+                selected, weights, target_m, scale_m);
+            std::vector<long double> predicted;
+            long double sum_prediction = 0.0L;
+            long double residual_squared = 0.0L;
+            for (const auto index : selected) {
+                const long double dx = (static_cast<long double>(station[index]) - target_m) / scale_m;
+                const long double value = coefficients[0] + dx * (coefficients[1] + dx * coefficients[2]);
+                predicted.push_back(value);
+                sum_prediction += value;
+                const long double residual = boundary_midpoints[index] - value;
+                residual_squared += residual * residual;
+            }
+            const long double count = static_cast<long double>(selected.size());
+            const long double mean_prediction = sum_prediction / count;
+            long double trend_squared = 0.0L;
+            for (const auto value : predicted) {
+                const long double centered = value - mean_prediction;
+                trend_squared += centered * centered;
+            }
+            // Two nonconstant fitted coefficients: require the observed drift
+            // to exceed four residual standard errors jointly (F > 16), with
+            // the same spatial resolution used to confirm section geometry.
+            if (trend_squared > 32.0L * residual_squared / (count - 3.0L) +
+                count * resolution_m * resolution_m) {
+                return false;
+            }
+        } catch (const PointCloudFitError&) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::vector<Point3D> recover_section_directions(
+    const std::vector<Point3D>& points,
+    const std::vector<Point3D>& curve) {
+    std::vector<double> residuals;
+    for (const auto& point : points) {
+        residuals.push_back(point.y - interpolate_transverse(curve, point.x));
+    }
+    const double center_m = median(residuals);
+    const double span_m = quantile(residuals, 0.95) - quantile(residuals, 0.05);
+    const bool scatter = has_spatially_supported_scatter_shape(points, residuals);
+    for (double& residual : residuals) {
+        residual = std::abs(residual - center_m);
+    }
+    if (10.0 * std::max(1.4826 * median(residuals), span_m / 3.29) <=
+        plan_half_window_m || scatter) {
+        return {};
+    }
+
+    // The existing curve supplies only an approximate spatial ordering. Every
+    // observation must then belong to a well-separated, transverse TLS section;
+    // row order and a nominal number of points per section carry no information.
+    std::vector<Point3D> ordered = points;
+    std::sort(ordered.begin(), ordered.end(), point_less);
+    std::vector<double> cumulative(curve.size(), 0.0);
+    for (std::size_t index = 1; index < curve.size(); ++index) {
+        cumulative[index] = cumulative[index - 1] + std::hypot(
+            curve[index].x - curve[index - 1].x, curve[index].y - curve[index - 1].y);
+    }
+    std::vector<std::pair<double, std::size_t>> projected;
+    projected.reserve(ordered.size());
+    for (std::size_t index = 0; index < ordered.size(); ++index) {
+        double best_squared_m2 = std::numeric_limits<double>::infinity();
+        double station_m = 0.0;
+        for (std::size_t segment = 1; segment < curve.size(); ++segment) {
+            const auto& start = curve[segment - 1];
+            const double dx = curve[segment].x - start.x;
+            const double dy = curve[segment].y - start.y;
+            const double fraction = std::clamp(
+                ((ordered[index].x - start.x) * dx + (ordered[index].y - start.y) * dy) /
+                (dx * dx + dy * dy), 0.0, 1.0);
+            const double ex = ordered[index].x - start.x - fraction * dx;
+            const double ey = ordered[index].y - start.y - fraction * dy;
+            const double squared_m2 = ex * ex + ey * ey;
+            if (squared_m2 < best_squared_m2) {
+                best_squared_m2 = squared_m2;
+                station_m = cumulative[segment - 1] +
+                    fraction * (cumulative[segment] - cumulative[segment - 1]);
+            }
+        }
+        projected.push_back({station_m, index});
+    }
+    std::sort(projected.begin(), projected.end());
+    std::vector<double> gaps;
+    const double precision_m = 64.0 * std::numeric_limits<double>::epsilon() *
+        std::max(1.0, cumulative.back());
+    for (std::size_t index = 1; index < projected.size(); ++index) {
+        const double gap_m = projected[index].first - projected[index - 1].first;
+        if (gap_m > precision_m) {
+            gaps.push_back(gap_m);
+        }
+    }
+    if (gaps.size() < 2) {
+        return {};
+    }
+    std::sort(gaps.begin(), gaps.end());
+    double separating_gap_m = 0.5 * gaps.front();
+    if (gaps.size() > ordered.size() / 3) {
+        if (gaps.back() <= 10.0 * median(gaps)) {
+            return {};
+        }
+        double largest_ratio = 1.0;
+        separating_gap_m = 0.0;
+        for (std::size_t index = gaps.size() / 20; index + 2 < gaps.size(); ++index) {
+            const double ratio = gaps[index + 1] / gaps[index];
+            if (ratio > largest_ratio) {
+                largest_ratio = ratio;
+                separating_gap_m = std::sqrt(gaps[index] * gaps[index + 1]);
+            }
+        }
+        if (separating_gap_m == 0.0) {
+            return {};
+        }
+    }
+
+    std::vector<SpatialSection> sections;
+    for (std::size_t begin = 0; begin < projected.size();) {
+        std::size_t end = begin + 1;
+        while (end < projected.size() &&
+            projected[end].first - projected[end - 1].first <= separating_gap_m) {
+            ++end;
+        }
+        if (end - begin < minimum_fit_anchor_count) {
+            return {};
+        }
+        SpatialSection section;
+        section.begin = begin;
+        section.end = end;
+        long double sum_x = 0.0L, sum_y = 0.0L, sum_z = 0.0L, sum_station = 0.0L;
+        for (std::size_t index = begin; index < end; ++index) {
+            const auto& point = ordered[projected[index].second];
+            sum_x += point.x;
+            sum_y += point.y;
+            sum_z += point.z;
+            sum_station += projected[index].first;
+        }
+        const long double count = static_cast<long double>(end - begin);
+        section.base = {static_cast<double>(sum_x / count),
+            static_cast<double>(sum_y / count), static_cast<double>(sum_z / count)};
+        section.station_m = static_cast<double>(sum_station / count);
+        long double xx = 0.0L, xy = 0.0L, yy = 0.0L;
+        for (std::size_t index = begin; index < end; ++index) {
+            const auto& point = ordered[projected[index].second];
+            const long double x = static_cast<long double>(point.x) - section.base.x;
+            const long double y = static_cast<long double>(point.y) - section.base.y;
+            xx += x * x;
+            xy += x * y;
+            yy += y * y;
+        }
+        const long double angle = 0.5L * std::atan2(2.0L * xy, xx - yy);
+        section.normal_x = static_cast<double>(std::cos(angle));
+        section.normal_y = static_cast<double>(std::sin(angle));
+        if (section.normal_y < 0.0) {
+            section.normal_x = -section.normal_x;
+            section.normal_y = -section.normal_y;
+        }
+        double lower_m = std::numeric_limits<double>::infinity();
+        double upper_m = -lower_m;
+        double maximum_residual_m = 0.0;
+        for (std::size_t index = begin; index < end; ++index) {
+            const auto& point = ordered[projected[index].second];
+            const double dx = point.x - section.base.x;
+            const double dy = point.y - section.base.y;
+            const double across_m = dx * section.normal_x + dy * section.normal_y;
+            lower_m = std::min(lower_m, across_m);
+            upper_m = std::max(upper_m, across_m);
+            maximum_residual_m = std::max(maximum_residual_m,
+                std::abs(dx * section.normal_y - dy * section.normal_x));
+        }
+        if (upper_m - lower_m <= precision_m ||
+            maximum_residual_m > section_relative_tolerance * (upper_m - lower_m) ||
+            section.normal_y <= 0.0 ||
+            (!sections.empty() && (section.station_m <= sections.back().station_m ||
+                section.normal_x * sections.back().normal_x +
+                section.normal_y * sections.back().normal_y <= 0.9))) {
+            return {};
+        }
+        sections.push_back(section);
+        begin = end;
+    }
+    if (sections.size() < minimum_fit_anchor_count) {
+        return {};
+    }
+
+    std::vector<double> station, angle, heights, counts;
+    for (const auto& section : sections) {
+        station.push_back(section.station_m);
+        angle.push_back(std::atan2(section.normal_y, section.normal_x));
+        heights.push_back(section.base.z);
+        counts.push_back(static_cast<double>(section.end - section.begin));
+    }
+    const auto angle_second = section_derivative(station, section_derivative(station, angle));
+    std::vector<double> offset(sections.size(), 0.0);
+    std::vector<double> offset_scale(sections.size(), 1.0);
+    for (std::size_t index = 1; index < sections.size(); ++index) {
+        const double step_m = station[index] - station[index - 1];
+        // Integrate the observed directions, including the second-order chord
+        // correction for varying curvature and nonuniform section spacing.
+        // No circle/spiral type, radius, or transition length is assumed.
+        const double chord_normal = 0.5 * (angle[index - 1] + angle[index]) -
+            (angle_second[index - 1] + angle_second[index]) * step_m * step_m / 24.0;
+        const double nx = std::cos(chord_normal);
+        const double ny = std::sin(chord_normal);
+        const auto& before = sections[index - 1];
+        const auto& after = sections[index];
+        const double incoming = before.normal_x * nx + before.normal_y * ny;
+        const double outgoing = after.normal_x * nx + after.normal_y * ny;
+        if (incoming <= 0.5 || outgoing <= 0.5) {
+            return {};
+        }
+        offset[index] = (offset[index - 1] * incoming -
+            (after.base.x - before.base.x) * nx - (after.base.y - before.base.y) * ny) / outgoing;
+        offset_scale[index] = offset_scale[index - 1] * incoming / outgoing;
+    }
+    std::vector<double> across;
+    std::vector<double> boundary_midpoints;
+    std::vector<double> widths;
+    across.reserve(points.size());
+    for (std::size_t section_index = 0; section_index < sections.size(); ++section_index) {
+        const auto& section = sections[section_index];
+        double lower_m = std::numeric_limits<double>::infinity();
+        double upper_m = -lower_m;
+        for (std::size_t index = section.begin; index < section.end; ++index) {
+            const auto& point = ordered[projected[index].second];
+            const double value_m = ((point.x - section.base.x) * section.normal_x +
+                (point.y - section.base.y) * section.normal_y - offset[section_index]) /
+                offset_scale[section_index];
+            if (!std::isfinite(value_m)) {
+                return {};
+            }
+            across.push_back(value_m);
+            lower_m = std::min(lower_m, value_m);
+            upper_m = std::max(upper_m, value_m);
+        }
+        boundary_midpoints.push_back(0.5 * (lower_m + upper_m));
+        widths.push_back(upper_m - lower_m);
+    }
+    if (!section_boundaries_support_directions(station, boundary_midpoints, widths)) {
+        return {};
+    }
+    const auto tail_weights = separated_tail_weights(across);
+    if (std::any_of(tail_weights.begin(), tail_weights.end(),
+        [](double weight) { return weight < 0.5; })) {
+        // Keep the established robust band model when a separated minority
+        // population prevents the full observed envelope defining one offset.
+        return {};
+    }
+    const double global_offset_m = 0.5 * (quantile(across, 0.01) + quantile(across, 0.99));
+    std::vector<Point3D> recovered;
+    try {
+        const auto z_fit = robust_local_quadratic(station, heights, height_half_window_m,
+            true, local_minimum_neighbors, counts, true);
+        for (std::size_t index = 0; index < sections.size(); ++index) {
+            const double displacement_m = offset[index] + offset_scale[index] * global_offset_m;
+            const auto& section = sections[index];
+            const Point3D point{section.base.x + displacement_m * section.normal_x,
+                section.base.y + displacement_m * section.normal_y, z_fit.fitted[index]};
+            if (!std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z) ||
+                (!recovered.empty() && point.x <= recovered.back().x)) {
+                return {};
+            }
+            recovered.push_back(point);
+        }
+        // Preserve measured directions between sections too. Linear chords at
+        // irregular survey spacing introduce curvature-dependent sag into an
+        // otherwise accurate centerline before the final arc-length sampling.
+        std::vector<Point3D> interpolated;
+        std::vector<double> height_targets;
+        interpolated.push_back(recovered.front());
+        height_targets.push_back(station.front());
+        for (std::size_t index = 1; index < recovered.size(); ++index) {
+            const auto& left = recovered[index - 1];
+            const auto& right = recovered[index];
+            const double dx = right.x - left.x;
+            const double count = std::ceil(std::hypot(dx, right.y - left.y) / bin_width_m);
+            if (!std::isfinite(count) || count > static_cast<double>(
+                maximum_output_point_count - interpolated.size())) {
+                return {};
+            }
+            const std::size_t steps = std::max(std::size_t{1}, static_cast<std::size_t>(count));
+            const double left_slope = -sections[index - 1].normal_x / sections[index - 1].normal_y;
+            const double right_slope = -sections[index].normal_x / sections[index].normal_y;
+            for (std::size_t step = 1; step <= steps; ++step) {
+                const double fraction = static_cast<double>(step) / static_cast<double>(steps);
+                const double square = fraction * fraction;
+                const double cube = square * fraction;
+                const double y = (2.0 * cube - 3.0 * square + 1.0) * left.y +
+                    (cube - 2.0 * square + fraction) * dx * left_slope +
+                    (-2.0 * cube + 3.0 * square) * right.y +
+                    (cube - square) * dx * right_slope;
+                if (!std::isfinite(y)) {
+                    return {};
+                }
+                interpolated.push_back({left.x + fraction * dx, y, 0.0});
+                height_targets.push_back(station[index - 1] +
+                    fraction * (station[index] - station[index - 1]));
+            }
+        }
+        const auto interpolated_heights = local_polynomial_predict(station, heights,
+            height_targets, height_half_window_m, z_fit.robust_weights,
+            true, local_minimum_neighbors, true);
+        for (std::size_t index = 0; index < interpolated.size(); ++index) {
+            interpolated[index].z = interpolated_heights[index];
+        }
+        return interpolated;
+    } catch (const PointCloudFitError&) {
+        // The original valid fit remains authoritative if this optional spatial
+        // evidence cannot support the existing height model.
+        return {};
+    }
+}
+
 std::vector<Point3D> sample_curve(
     const std::vector<Point3D>& curve,
     double interval_m) {
@@ -1304,9 +1674,13 @@ std::vector<Point3D> PointCloudFitter::fit_and_sample(
         }
     }
 
-    const std::vector<Point3D> curve = sparse_support
+    std::vector<Point3D> curve = sparse_support
         ? build_sparse_curve(oriented_points, anchors)
         : build_curve(oriented_points, anchors);
+    const auto directional_curve = recover_section_directions(oriented_points, curve);
+    if (!directional_curve.empty()) {
+        curve = directional_curve;
+    }
     std::vector<Point3D> samples = sample_curve(curve, interval_m);
     transform_from_plan_basis(samples, basis, local.origin);
     return samples;

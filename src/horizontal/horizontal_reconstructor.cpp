@@ -39,41 +39,10 @@ double round_horizontal_parameter(double value_m, double rounding_m) {
     return (whole + increment) * rounding_m;
 }
 
-} // namespace
-
-HorizontalCurveParameters apply_horizontal_output_options(
-    HorizontalCurveParameters parameters,
-    const ReconstructionOptions& options) {
-    if (options.equalize_horizontal_spiral_lengths) {
-        const double equal_length_m =
-            (parameters.entry_spiral_length_m + parameters.exit_spiral_length_m) * 0.5;
-        parameters.entry_spiral_length_m = equal_length_m;
-        parameters.exit_spiral_length_m = equal_length_m;
-    }
-    parameters.radius_m = round_horizontal_parameter(
-        parameters.radius_m, options.horizontal_curve_radius_rounding_m);
-    parameters.entry_spiral_length_m = round_horizontal_parameter(
-        parameters.entry_spiral_length_m,
-        options.horizontal_spiral_length_rounding_m);
-    parameters.exit_spiral_length_m = round_horizontal_parameter(
-        parameters.exit_spiral_length_m,
-        options.horizontal_spiral_length_rounding_m);
-    return parameters;
-}
-
-HorizontalReconstructor::HorizontalReconstructor(ReconstructionOptions options)
-    : options_(std::move(options)) {}
-
-std::vector<HorizontalControlPoint> HorizontalReconstructor::reconstruct(
-    const std::vector<Point2D>& ordered_points) const {
-    return reconstruct_with_curvature_graph(ordered_points).controls;
-}
-
-HorizontalReconstruction HorizontalReconstructor::reconstruct_with_curvature_graph(
+HorizontalReconstruction reconstruct_analyzed_horizontal_samples(
     const std::vector<Point2D>& ordered_points,
-    const std::vector<HorizontalCurvatureSample>& curvature_graph) const {
-    const auto analysis = classify_horizontal_samples(
-        ordered_points, options_, curvature_graph);
+    const HorizontalSampleAnalysis& analysis,
+    const ReconstructionOptions& options) {
     std::vector<FittedStraightRun> straight_runs;
     for (const auto& segment : analysis.straight_segments) {
         const auto points = copy_range(
@@ -126,8 +95,8 @@ HorizontalReconstruction HorizontalReconstructor::reconstruct_with_curvature_gra
                 straight_runs[index + 1].fit.start,
                 straight_runs[index + 1].fit.end,
                 intersections[index],
-                options_),
-            options_);
+                options),
+            options);
         controls.push_back({
             HorizontalControlPointKind::intersection,
             intersections[index],
@@ -142,9 +111,81 @@ HorizontalReconstruction HorizontalReconstructor::reconstruct_with_curvature_gra
         0.0, 0.0, 0.0
     });
 
-    const HorizontalAlignment closure_check(controls, options_.start_station_m);
+    const HorizontalAlignment closure_check(controls, options.start_station_m);
     (void)closure_check;
     return {std::move(controls), analysis.curvature_graph};
+}
+
+} // namespace
+
+HorizontalCurveParameters apply_horizontal_output_options(
+    HorizontalCurveParameters parameters,
+    const ReconstructionOptions& options) {
+    if (options.equalize_horizontal_spiral_lengths) {
+        const double equal_length_m =
+            (parameters.entry_spiral_length_m + parameters.exit_spiral_length_m) * 0.5;
+        parameters.entry_spiral_length_m = equal_length_m;
+        parameters.exit_spiral_length_m = equal_length_m;
+    }
+    parameters.radius_m = round_horizontal_parameter(
+        parameters.radius_m, options.horizontal_curve_radius_rounding_m);
+    parameters.entry_spiral_length_m = round_horizontal_parameter(
+        parameters.entry_spiral_length_m,
+        options.horizontal_spiral_length_rounding_m);
+    parameters.exit_spiral_length_m = round_horizontal_parameter(
+        parameters.exit_spiral_length_m,
+        options.horizontal_spiral_length_rounding_m);
+    return parameters;
+}
+
+HorizontalReconstructor::HorizontalReconstructor(ReconstructionOptions options)
+    : options_(std::move(options)) {}
+
+std::vector<HorizontalControlPoint> HorizontalReconstructor::reconstruct(
+    const std::vector<Point2D>& ordered_points) const {
+    return reconstruct_with_curvature_graph(ordered_points).controls;
+}
+
+HorizontalReconstruction HorizontalReconstructor::reconstruct_with_curvature_graph(
+    const std::vector<Point2D>& ordered_points,
+    const std::vector<HorizontalCurvatureSample>& curvature_graph) const {
+    const auto analysis = classify_horizontal_samples(
+        ordered_points, options_, curvature_graph);
+    const bool missing_tangent_support = curvature_graph.empty() &&
+        std::any_of(analysis.straight_segments.begin(), analysis.straight_segments.end(),
+            [](const HorizontalStraightSegment& segment) {
+                return segment.first_index == segment.last_index;
+            });
+    if (!analysis.curves_erased_by_dynamic && !missing_tangent_support) {
+        return reconstruct_analyzed_horizontal_samples(ordered_points, analysis, options_);
+    }
+
+    // Noisy curvature can erase all curves or split one with a singleton
+    // tangent that cannot be fitted. Retry bounded wider support in the same
+    // classifier, and adopt only a complete fitted scheme with valid geometry.
+    // Explicit caller-supplied properties never enter this recovery.
+    for (const double window_scale : {2.0, 3.0}) {
+        ReconstructionOptions refined_options = options_;
+        refined_options.curvature_window_m = window_scale * options_.curvature_window_m;
+        if (!has_horizontal_curvature_support(
+                analysis.cumulative_distance_m, refined_options.curvature_window_m)) {
+            continue;
+        }
+        try {
+            const auto refined = classify_horizontal_samples(
+                ordered_points, refined_options);
+            if (std::any_of(refined.curved.begin(), refined.curved.end(),
+                            [](bool curved) { return curved; })) {
+                return reconstruct_analyzed_horizontal_samples(
+                    ordered_points, refined, options_);
+            }
+        } catch (const std::invalid_argument&) {
+            // Wider support is an internal candidate. Its classification,
+            // fitting or closure failure does not invalidate the original.
+            continue;
+        }
+    }
+    return reconstruct_analyzed_horizontal_samples(ordered_points, analysis, options_);
 }
 
 } // namespace alignment_reconstruct::detail
